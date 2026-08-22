@@ -1,0 +1,8 @@
+.gradle/
+build/
+app/build/
+local.properties
+.libbox-source/
+.libbox-build.*/
+.tmp-*
+*.log

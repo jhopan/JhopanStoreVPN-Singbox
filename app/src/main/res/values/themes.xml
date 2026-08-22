@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.JhopanLiteVPN" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="android:statusBarColor">#121212</item>
+        <item name="android:navigationBarColor">#121212</item>
+    </style>
+</resources>
