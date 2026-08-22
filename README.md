@@ -4,12 +4,13 @@ Android Java VPN client by JhopanStore. Scope: VLESS + WebSocket + TLS normal SN
 
 ## Features
 
-- Connect/disconnect through Android `VpnService`
-- VLESS URI import/export through clipboard
-- Device-local installation HWID
-- Per-app traffic total and speed while connected
+- Android `VpnService` with persistent foreground notification
+- VLESS WebSocket/TLS import/export; supplied path, SNI, and Host preserved
+- `allowInsecure=true` by default for compatible Worker bug-domain profiles
+- Restored UI service state with heartbeat; stale VPN notification is cleared on stop/error
+- Device-local installation HWID and per-app traffic display
 
-Excluded: OneRing, uTLS, QUIC, hotspot sharing, backup servers, rules, failover, autostart, wake lock, and keepalive.
+Excluded: OneRing, QUIC, hotspot sharing, backup servers, rules, failover, autostart, and wake lock.
 
 ## Build
 
