@@ -18,8 +18,12 @@ import com.jhopanstore.litevpn.core.SingboxConfig;
 import com.jhopanstore.litevpn.core.VlessConfig;
 import com.jhopanstore.litevpn.core.VlessParser;
 import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -47,8 +51,11 @@ public final class VpnService extends android.net.VpnService {
     private static final String KEY_URI = "uri";
     private static final String KEY_STATE = "state";
     private static final String KEY_LAST_SEEN = "last_seen";
+    private static final String KEY_LAST_PROBE = "last_probe_success";
     private static final int NOTIFICATION_ID = 7;
     private static final String CHANNEL = "vpn";
+    private static final long HEALTH_CHECK_MS = 30_000;
+    private static final String HEALTH_URL = "http://connectivitycheck.gstatic.com/generate_204";
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService heartbeat = Executors.newSingleThreadScheduledExecutor();
@@ -59,6 +66,7 @@ public final class VpnService extends android.net.VpnService {
     private ConnectivityManager.NetworkCallback networkCallback;
     private boolean connecting;
     private boolean running;
+    private int failedProbes;
 
     public static void setListener(Listener value) { listener = value; }
     public static void start(Context context, String uri) {
@@ -76,6 +84,8 @@ public final class VpnService extends android.net.VpnService {
             options.setBasePath(getFilesDir().getAbsolutePath());
             Libbox.setup(options);
         } catch (Exception error) { Log.e("VpnService", "libbox setup", error); }
+        heartbeat.scheduleAtFixedRate(this::writeHeartbeat, 0, 3, TimeUnit.SECONDS);
+        heartbeat.scheduleAtFixedRate(this::checkTunnel, HEALTH_CHECK_MS, HEALTH_CHECK_MS, TimeUnit.MILLISECONDS);
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
@@ -106,8 +116,7 @@ public final class VpnService extends android.net.VpnService {
             closeCore();
             service = Libbox.newService(json, new Platform());
             service.start();
-            synchronized (lifecycleLock) { connecting = false; running = true; }
-            startHeartbeat();
+            synchronized (lifecycleLock) { connecting = false; running = true; failedProbes = 0; }
             updateNotification("Connected");
             setState("Connected");
         } catch (Exception error) {
@@ -188,8 +197,8 @@ public final class VpnService extends android.net.VpnService {
         interfaceListener = value;
         ConnectivityManager manager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
         networkCallback = new ConnectivityManager.NetworkCallback() {
-            @Override public void onAvailable(Network network) { reportNetwork(network); }
-            @Override public void onCapabilitiesChanged(Network network, NetworkCapabilities caps) { reportNetwork(network); }
+            @Override public void onAvailable(Network network) { reportNetwork(network); scheduleHealthCheck(); }
+            @Override public void onCapabilitiesChanged(Network network, NetworkCapabilities caps) { reportNetwork(network); scheduleHealthCheck(); }
         };
         try { manager.registerDefaultNetworkCallback(networkCallback); manager.getActiveNetwork(); Network current = manager.getActiveNetwork(); if (current != null) reportNetwork(current); }
         catch (Exception error) { Log.w("VpnService", "network callback", error); }
@@ -237,10 +246,46 @@ public final class VpnService extends android.net.VpnService {
         state(value);
     }
 
-    private void startHeartbeat() {
-        heartbeat.scheduleAtFixedRate(() -> {
-            if (running) statusPrefs().edit().putLong(KEY_LAST_SEEN, System.currentTimeMillis()).apply();
-        }, 0, 3, TimeUnit.SECONDS);
+    private void writeHeartbeat() {
+        if (running) statusPrefs().edit().putLong(KEY_LAST_SEEN, System.currentTimeMillis()).apply();
+    }
+
+    private void scheduleHealthCheck() {
+        heartbeat.schedule(this::checkTunnel, 2, TimeUnit.SECONDS);
+    }
+
+    private void checkTunnel() {
+        synchronized (lifecycleLock) { if (!running || connecting) return; }
+        boolean healthy = false;
+        HttpURLConnection connection = null;
+        try {
+            Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress("127.0.0.1", SingboxConfig.PROXY_PORT));
+            connection = (HttpURLConnection) new URL(HEALTH_URL).openConnection(proxy);
+            connection.setRequestMethod("HEAD");
+            connection.setConnectTimeout(5_000);
+            connection.setReadTimeout(5_000);
+            int code = connection.getResponseCode();
+            healthy = code == HttpURLConnection.HTTP_NO_CONTENT || code == HttpURLConnection.HTTP_OK;
+        } catch (Exception ignored) {
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+        if (healthy) {
+            synchronized (lifecycleLock) { failedProbes = 0; }
+            statusPrefs().edit().putLong(KEY_LAST_PROBE, System.currentTimeMillis()).apply();
+            return;
+        }
+        boolean reconnect;
+        synchronized (lifecycleLock) { reconnect = ++failedProbes >= 2 && running && !connecting; if (reconnect) { running = false; connecting = true; failedProbes = 0; } }
+        if (reconnect) reconnectTunnel();
+    }
+
+    private void reconnectTunnel() {
+        String uri = statusPrefs().getString(KEY_URI, null);
+        if (uri == null) { disconnect(); return; }
+        updateNotification("Reconnecting…");
+        setState("Reconnecting…");
+        worker.execute(() -> connect(uri));
     }
 
     private void closeCore() {
@@ -253,14 +298,13 @@ public final class VpnService extends android.net.VpnService {
     private void disconnect() {
         synchronized (lifecycleLock) { connecting = false; running = false; }
         closeCore();
-        heartbeat.shutdownNow();
-        statusPrefs().edit().remove(KEY_URI).putString(KEY_STATE, "Disconnected").putLong(KEY_LAST_SEEN, 0).apply();
+        statusPrefs().edit().remove(KEY_URI).putString(KEY_STATE, "Disconnected").putLong(KEY_LAST_SEEN, 0).putLong(KEY_LAST_PROBE, 0).apply();
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(NOTIFICATION_ID);
         stopForeground(STOP_FOREGROUND_REMOVE);
         state("Disconnected");
         stopSelf();
     }
-    @Override public void onDestroy() { synchronized (lifecycleLock) { running = false; connecting = false; } closeCore(); heartbeat.shutdownNow(); worker.shutdownNow(); statusPrefs().edit().putString(KEY_STATE, "Disconnected").putLong(KEY_LAST_SEEN, 0).apply(); super.onDestroy(); }
+    @Override public void onDestroy() { synchronized (lifecycleLock) { running = false; connecting = false; } closeCore(); heartbeat.shutdownNow(); worker.shutdownNow(); statusPrefs().edit().putString(KEY_STATE, "Disconnected").putLong(KEY_LAST_SEEN, 0).putLong(KEY_LAST_PROBE, 0).apply(); super.onDestroy(); }
     @Override public void onRevoke() { disconnect(); super.onRevoke(); }
 
     private void createChannel() {
