@@ -4,6 +4,7 @@ Android Java VPN client by JhopanStore. Scope: VLESS + WebSocket + TLS normal SN
 
 ## Features
 
+- 1.2-second JhopanStore launch splash
 - Android `VpnService` with persistent foreground notification
 - VLESS WebSocket/TLS import/export; supplied path, SNI, and Host preserved
 - `allowInsecure=true` by default for compatible Worker bug-domain profiles
