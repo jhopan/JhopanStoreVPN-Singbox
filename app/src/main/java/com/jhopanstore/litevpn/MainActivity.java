@@ -136,7 +136,7 @@ public final class MainActivity extends AppCompatActivity {
     private void disconnect() { VpnService.stop(this); }
     private void onVpnState(String value) {
         status.setText(value);
-        connected = "Connected".equals(value) || "Connecting…".equals(value) || "Reconnecting…".equals(value);
+        connected = "Connected".equals(value) || "Connecting…".equals(value) || "Checking internet…".equals(value) || "Reconnecting…".equals(value);
         connect.setText(connected ? "DISCONNECT" : "CONNECT");
         if (!connected) resetTraffic();
     }

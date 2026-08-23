@@ -23,6 +23,7 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -66,6 +67,7 @@ public final class VpnService extends android.net.VpnService {
     private ConnectivityManager.NetworkCallback networkCallback;
     private boolean connecting;
     private boolean running;
+    private boolean terminalFailure;
     private int failedProbes;
 
     public static void setListener(Listener value) { listener = value; }
@@ -92,7 +94,7 @@ public final class VpnService extends android.net.VpnService {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) { disconnect(); return START_NOT_STICKY; }
         ConnectivityManager manager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
         NetworkCapabilities caps = manager.getNetworkCapabilities(manager.getActiveNetwork());
-        if (caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) { disconnect(); return START_NOT_STICKY; }
+        if (caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) { fail("No network: turn on Wi-Fi or mobile data"); return START_NOT_STICKY; }
         String uri = intent == null ? statusPrefs().getString(KEY_URI, null) : intent.getStringExtra(EXTRA_URI);
         if (uri == null) { setState("Disconnected"); stopSelf(); return START_NOT_STICKY; }
         synchronized (lifecycleLock) {
@@ -116,13 +118,16 @@ public final class VpnService extends android.net.VpnService {
             closeCore();
             service = Libbox.newService(json, new Platform());
             service.start();
-            synchronized (lifecycleLock) { connecting = false; running = true; failedProbes = 0; }
+            synchronized (lifecycleLock) { connecting = false; running = true; terminalFailure = false; failedProbes = 0; }
+            updateNotification("Checking internet…");
+            setState("Checking internet…");
+            String failure = verifyTunnel();
+            if (failure != null) { fail(failure); return; }
             updateNotification("Connected");
             setState("Connected");
         } catch (Exception error) {
             Log.e("VpnService", "connect", error);
-            synchronized (lifecycleLock) { connecting = false; }
-            disconnect();
+            fail(connectionFailure(error));
         }
     }
 
@@ -256,7 +261,18 @@ public final class VpnService extends android.net.VpnService {
 
     private void checkTunnel() {
         synchronized (lifecycleLock) { if (!running || connecting) return; }
-        boolean healthy = false;
+        String failure = verifyTunnel();
+        if (failure == null) {
+            synchronized (lifecycleLock) { failedProbes = 0; }
+            statusPrefs().edit().putLong(KEY_LAST_PROBE, System.currentTimeMillis()).apply();
+            return;
+        }
+        boolean reconnect;
+        synchronized (lifecycleLock) { reconnect = ++failedProbes >= 2 && running && !connecting; if (reconnect) { running = false; connecting = true; failedProbes = 0; } }
+        if (reconnect) reconnectTunnel();
+    }
+
+    private String verifyTunnel() {
         HttpURLConnection connection = null;
         try {
             Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress("127.0.0.1", SingboxConfig.PROXY_PORT));
@@ -265,19 +281,25 @@ public final class VpnService extends android.net.VpnService {
             connection.setConnectTimeout(5_000);
             connection.setReadTimeout(5_000);
             int code = connection.getResponseCode();
-            healthy = code == HttpURLConnection.HTTP_NO_CONTENT || code == HttpURLConnection.HTTP_OK;
-        } catch (Exception ignored) {
+            if (code == HttpURLConnection.HTTP_NO_CONTENT || code == HttpURLConnection.HTTP_OK) return null;
+            return "Internet check failed: server returned HTTP " + code;
+        } catch (SocketTimeoutException error) {
+            return "Internet check timed out";
+        } catch (java.net.ConnectException error) {
+            return "VPN proxy unavailable";
+        } catch (Exception error) {
+            return "Internet check failed";
         } finally {
             if (connection != null) connection.disconnect();
         }
-        if (healthy) {
-            synchronized (lifecycleLock) { failedProbes = 0; }
-            statusPrefs().edit().putLong(KEY_LAST_PROBE, System.currentTimeMillis()).apply();
-            return;
-        }
-        boolean reconnect;
-        synchronized (lifecycleLock) { reconnect = ++failedProbes >= 2 && running && !connecting; if (reconnect) { running = false; connecting = true; failedProbes = 0; } }
-        if (reconnect) reconnectTunnel();
+    }
+
+    private static String connectionFailure(Exception error) {
+        if (error instanceof java.net.UnknownHostException) return "DNS failed: server name could not be resolved";
+        String text = String.valueOf(error.getMessage()).toLowerCase();
+        if (text.contains("tls") || text.contains("certificate")) return "TLS failed: check SNI or allowInsecure";
+        if (text.contains("websocket") || text.contains("ws ")) return "WebSocket failed: check path or Host";
+        return "Connection failed: check server, port, path, SNI, and Host";
     }
 
     private void reconnectTunnel() {
@@ -288,6 +310,16 @@ public final class VpnService extends android.net.VpnService {
         worker.execute(() -> connect(uri));
     }
 
+    private void fail(String reason) {
+        synchronized (lifecycleLock) { connecting = false; running = false; terminalFailure = true; }
+        closeCore();
+        statusPrefs().edit().remove(KEY_URI).putString(KEY_STATE, reason).putLong(KEY_LAST_SEEN, 0).putLong(KEY_LAST_PROBE, 0).apply();
+        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(NOTIFICATION_ID);
+        stopForeground(STOP_FOREGROUND_REMOVE);
+        state(reason);
+        stopSelf();
+    }
+
     private void closeCore() {
         stopNetworkMonitor();
         try { if (service != null) service.close(); } catch (Exception ignored) {}
@@ -296,7 +328,7 @@ public final class VpnService extends android.net.VpnService {
         tun = null;
     }
     private void disconnect() {
-        synchronized (lifecycleLock) { connecting = false; running = false; }
+        synchronized (lifecycleLock) { connecting = false; running = false; terminalFailure = false; }
         closeCore();
         statusPrefs().edit().remove(KEY_URI).putString(KEY_STATE, "Disconnected").putLong(KEY_LAST_SEEN, 0).putLong(KEY_LAST_PROBE, 0).apply();
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(NOTIFICATION_ID);
@@ -304,7 +336,7 @@ public final class VpnService extends android.net.VpnService {
         state("Disconnected");
         stopSelf();
     }
-    @Override public void onDestroy() { synchronized (lifecycleLock) { running = false; connecting = false; } closeCore(); heartbeat.shutdownNow(); worker.shutdownNow(); statusPrefs().edit().putString(KEY_STATE, "Disconnected").putLong(KEY_LAST_SEEN, 0).putLong(KEY_LAST_PROBE, 0).apply(); super.onDestroy(); }
+    @Override public void onDestroy() { boolean failed; synchronized (lifecycleLock) { running = false; connecting = false; failed = terminalFailure; } closeCore(); heartbeat.shutdownNow(); worker.shutdownNow(); if (!failed) statusPrefs().edit().putString(KEY_STATE, "Disconnected").putLong(KEY_LAST_SEEN, 0).putLong(KEY_LAST_PROBE, 0).apply(); super.onDestroy(); }
     @Override public void onRevoke() { disconnect(); super.onRevoke(); }
 
     private void createChannel() {
