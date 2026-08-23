@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#121212">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp">
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="JhopanStore VPN" android:textColor="#4CAF50" android:textSize="28sp" android:textStyle="bold" android:gravity="center"/>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="JhopanStore VPN" android:textColor="#4CAF50" android:textSize="28sp" android:textStyle="bold" android:gravity="center"/>
+        <ImageButton android:id="@+id/more" android:layout_width="48dp" android:layout_height="48dp" android:contentDescription="More options" android:src="@android:drawable/ic_menu_more" android:tint="#FFFFFF" android:background="?android:attr/selectableItemBackgroundBorderless"/>
+    </LinearLayout>
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="VLESS • WebSocket • TLS" android:textColor="#BDBDBD" android:gravity="center"/>
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp" android:text="Address / Port" android:textColor="#FFFFFF" android:textStyle="bold"/>
     <EditText android:id="@+id/address" android:layout_width="match_parent" android:layout_height="50dp" android:hint="example.com:443" android:textColor="#FFFFFF" android:textColorHint="#888888" android:background="#222222" android:padding="10dp" android:singleLine="true"/>
@@ -13,14 +16,9 @@
     <EditText android:id="@+id/sni" android:layout_width="match_parent" android:layout_height="50dp" android:hint="example.com" android:textColor="#FFFFFF" android:textColorHint="#888888" android:background="#222222" android:padding="10dp" android:singleLine="true"/>
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:text="WebSocket Host" android:textColor="#FFFFFF" android:textStyle="bold"/>
     <EditText android:id="@+id/host" android:layout_width="match_parent" android:layout_height="50dp" android:hint="example.com" android:textColor="#FFFFFF" android:textColorHint="#888888" android:background="#222222" android:padding="10dp" android:singleLine="true"/>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:orientation="horizontal">
-        <Button android:id="@+id/importClipboard" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:text="IMPORT"/>
-        <Button android:id="@+id/exportClipboard" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:text="EXPORT"/>
-    </LinearLayout>
     <Button android:id="@+id/connect" android:layout_width="match_parent" android:layout_height="56dp" android:layout_marginTop="16dp" android:text="CONNECT" android:textStyle="bold" android:backgroundTint="#4CAF50"/>
 
     <TextView android:id="@+id/traffic" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Traffic: -" android:textColor="#2196F3" android:fontFamily="monospace"/>
-    <TextView android:id="@+id/hwid" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:textColor="#BDBDBD" android:fontFamily="monospace" android:textIsSelectable="true"/>
     <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="70dp" android:layout_marginTop="16dp" android:padding="12dp" android:background="#1A1A1A" android:text="Disconnected" android:textColor="#4CAF50" android:fontFamily="monospace"/>
 </LinearLayout>
 </ScrollView>
