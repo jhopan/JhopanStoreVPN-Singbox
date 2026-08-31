@@ -13,13 +13,12 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 import androidx.core.content.ContextCompat;
 import com.jhopanstore.litevpn.core.VlessConfig;
 import com.jhopanstore.litevpn.core.VlessParser;
@@ -46,13 +45,16 @@ public final class MainActivity extends AppCompatActivity {
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         setContentView(R.layout.activity_main);
+        Toolbar toolbar = findViewById(R.id.toolbar);
+        toolbar.setTitle("JhopanStore VPN");
+        setSupportActionBar(toolbar);
         prefs = getSharedPreferences("vpn", MODE_PRIVATE);
         address = findViewById(R.id.address); uuid = findViewById(R.id.uuid); path = findViewById(R.id.path); sni = findViewById(R.id.sni); host = findViewById(R.id.host);
         status = findViewById(R.id.status); traffic = findViewById(R.id.traffic); connect = findViewById(R.id.connect);
         load();
         hwid = installationHwid();
         connect.setOnClickListener(v -> { if (connected) disconnect(); else requestConnect(); });
-        findViewById(R.id.more).setOnClickListener(this::showMoreMenu);
+
         VpnService.setListener(value -> runOnUiThread(() -> onVpnState(value)));
         requestNotificationPermission();
         handleSharedFile(getIntent());
@@ -74,26 +76,19 @@ public final class MainActivity extends AppCompatActivity {
         onVpnState(value);
     }
 
-    private void showMoreMenu(View anchor) {
-        PopupMenu menu = new PopupMenu(this, anchor);
-        menu.getMenu().add(Menu.NONE, 1, Menu.NONE, "Import Clipboard");
-        menu.getMenu().add(Menu.NONE, 2, Menu.NONE, "Import .jvs File");
-        menu.getMenu().add(Menu.NONE, 3, Menu.NONE, "Export Clipboard");
-        menu.getMenu().add(Menu.NONE, 4, Menu.NONE, "Export .jvs File");
-        menu.getMenu().add(Menu.NONE, 5, Menu.NONE, "Copy HWID");
-        menu.setOnMenuItemClickListener(this::onMoreItem);
-        menu.show();
+    @Override public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main_menu, menu);
+        return true;
     }
 
-    private boolean onMoreItem(MenuItem item) {
-        switch (item.getItemId()) {
-            case 1: importText(clipboard()); return true;
-            case 2: openImportFile(); return true;
-            case 3: copy(exportLink()); return true;
-            case 4: createExportFile(); return true;
-            case 5: copy(hwid); return true;
-            default: return false;
-        }
+    @Override public boolean onOptionsItemSelected(MenuItem item) {
+        int id = item.getItemId();
+        if (id == R.id.action_import_clipboard) { importText(clipboard()); return true; }
+        if (id == R.id.action_import_file) { openImportFile(); return true; }
+        if (id == R.id.action_export_clipboard) { copy(exportLink()); return true; }
+        if (id == R.id.action_export_file) { createExportFile(); return true; }
+        if (id == R.id.action_hwid) { copy(hwid); return true; }
+        return super.onOptionsItemSelected(item);
     }
 
     private void openImportFile() {
