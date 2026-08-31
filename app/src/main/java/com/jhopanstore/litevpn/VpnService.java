@@ -56,7 +56,12 @@ public final class VpnService extends android.net.VpnService {
     private static final int NOTIFICATION_ID = 7;
     private static final String CHANNEL = "vpn";
     private static final long HEALTH_CHECK_MS = 30_000;
-    private static final String HEALTH_URL = "http://connectivitycheck.gstatic.com/generate_204";
+    private static final String HEALTH_URL = "https://www.gstatic.com/generate_204";
+    private static final int PROBE_FAIL_LIMIT = 3;
+    private static final int MAX_AUTO_RECONNECTS = 3;
+    private static final int PROBE_TIMEOUT_MS = 8_000;
+    private static final int PROBE_ATTEMPTS = 6;
+    private static final long PROBE_GAP_MS = 2_000;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService heartbeat = Executors.newSingleThreadScheduledExecutor();
@@ -67,6 +72,7 @@ public final class VpnService extends android.net.VpnService {
     private ConnectivityManager.NetworkCallback networkCallback;
     private boolean connecting;
     private boolean running;
+    private int autoReconnects;
     private boolean terminalFailure;
     private int failedProbes;
 
@@ -118,10 +124,10 @@ public final class VpnService extends android.net.VpnService {
             closeCore();
             service = Libbox.newService(json, new Platform());
             service.start();
-            synchronized (lifecycleLock) { connecting = false; running = true; terminalFailure = false; failedProbes = 0; }
+            synchronized (lifecycleLock) { connecting = false; running = true; terminalFailure = false; failedProbes = 0; autoReconnects = 0; }
             updateNotification("Checking internet…");
             setState("Checking internet…");
-            String failure = verifyTunnel();
+            String failure = awaitHealthyTunnel();
             if (failure != null) { fail(failure); return; }
             updateNotification("Connected");
             setState("Connected");
@@ -268,8 +274,14 @@ public final class VpnService extends android.net.VpnService {
             return;
         }
         boolean reconnect;
-        synchronized (lifecycleLock) { reconnect = ++failedProbes >= 2 && running && !connecting; if (reconnect) { running = false; connecting = true; failedProbes = 0; } }
+        synchronized (lifecycleLock) {
+            reconnect = ++failedProbes >= PROBE_FAIL_LIMIT && running && !connecting && autoReconnects < MAX_AUTO_RECONNECTS;
+            if (reconnect) { running = false; connecting = true; failedProbes = 0; autoReconnects++; }
+            else if (failedProbes >= PROBE_FAIL_LIMIT && running && !connecting) { running = false; connecting = true; failedProbes = 0; }
+            else { failedProbes = 0; }
+        }
         if (reconnect) reconnectTunnel();
+        else if (!running) fail("Cannot connect: check server, port, path, SNI, and Host");
     }
 
     private String verifyTunnel() {
@@ -278,10 +290,10 @@ public final class VpnService extends android.net.VpnService {
             Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress("127.0.0.1", SingboxConfig.PROXY_PORT));
             connection = (HttpURLConnection) new URL(HEALTH_URL).openConnection(proxy);
             connection.setRequestMethod("HEAD");
-            connection.setConnectTimeout(5_000);
-            connection.setReadTimeout(5_000);
+            connection.setConnectTimeout(PROBE_TIMEOUT_MS);
+            connection.setReadTimeout(PROBE_TIMEOUT_MS);
             int code = connection.getResponseCode();
-            if (code == HttpURLConnection.HTTP_NO_CONTENT || code == HttpURLConnection.HTTP_OK) return null;
+            if (code == HttpURLConnection.HTTP_NO_CONTENT || code == HttpURLConnection.HTTP_OK || code == HttpURLConnection.HTTP_ACCEPTED) return null;
             return "Internet check failed: server returned HTTP " + code;
         } catch (SocketTimeoutException error) {
             return "Internet check timed out";
@@ -292,6 +304,20 @@ public final class VpnService extends android.net.VpnService {
         } finally {
             if (connection != null) connection.disconnect();
         }
+    }
+
+    private String awaitHealthyTunnel() {
+        String last = "Internet check failed";
+        for (int attempt = 0; attempt < PROBE_ATTEMPTS; attempt++) {
+            if (attempt > 0) {
+                try { Thread.sleep(PROBE_GAP_MS); } catch (InterruptedException error) { return "Connection interrupted"; }
+            }
+            synchronized (lifecycleLock) { if (!running || connecting) return null; }
+            updateNotification("Checking internet… (" + (attempt + 1) + "/" + PROBE_ATTEMPTS + ")");
+            last = verifyTunnel();
+            if (last == null) { synchronized (lifecycleLock) { failedProbes = 0; } return null; }
+        }
+        return last;
     }
 
     private static String connectionFailure(Exception error) {
