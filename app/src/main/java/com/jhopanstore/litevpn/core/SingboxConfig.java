@@ -9,7 +9,7 @@ public final class SingboxConfig {
 
     public static String build(VlessConfig config, String cachePath) throws Exception {
         JSONObject root = new JSONObject();
-        root.put("log", new JSONObject().put("level", "debug"));
+        root.put("log", new JSONObject().put("level", "warn"));
         root.put("dns", new JSONObject().put("servers", new JSONArray()
             .put(new JSONObject().put("tag", "dns-main").put("address", "8.8.8.8").put("strategy", "prefer_ipv4"))
             .put(new JSONObject().put("tag", "dns-backup").put("address", "8.8.4.4").put("strategy", "prefer_ipv4"))

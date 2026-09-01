@@ -55,7 +55,10 @@ public final class VpnService extends android.net.VpnService {
     private static final String KEY_LAST_PROBE = "last_probe_success";
     private static final int NOTIFICATION_ID = 7;
     private static final String CHANNEL = "vpn";
-    private static final long HEALTH_CHECK_MS = 30_000;
+    private static final long HEARTBEAT_MS = 15_000;
+    private static final long STABLE_PROBE_MS = 90_000;
+    private static final long RECOVER_PROBE_MS = 30_000;
+    private static final long PROBE_WRITE_THROTTLE_MS = 60_000;
     private static final String HEALTH_URL = "https://www.gstatic.com/generate_204";
     private static final int PROBE_FAIL_LIMIT = 3;
     private static final int MAX_AUTO_RECONNECTS = 3;
@@ -75,6 +78,8 @@ public final class VpnService extends android.net.VpnService {
     private int autoReconnects;
     private boolean terminalFailure;
     private int failedProbes;
+    private boolean healthyStable;
+    private long lastProbeWrite;
 
     public static void setListener(Listener value) { listener = value; }
     public static void start(Context context, String uri) {
@@ -92,8 +97,8 @@ public final class VpnService extends android.net.VpnService {
             options.setBasePath(getFilesDir().getAbsolutePath());
             Libbox.setup(options);
         } catch (Exception error) { Log.e("VpnService", "libbox setup", error); }
-        heartbeat.scheduleAtFixedRate(this::writeHeartbeat, 0, 3, TimeUnit.SECONDS);
-        heartbeat.scheduleAtFixedRate(this::checkTunnel, HEALTH_CHECK_MS, HEALTH_CHECK_MS, TimeUnit.MILLISECONDS);
+        heartbeat.scheduleAtFixedRate(this::writeHeartbeat, 0, HEARTBEAT_MS, TimeUnit.MILLISECONDS);
+        scheduleProbe();
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
@@ -131,6 +136,8 @@ public final class VpnService extends android.net.VpnService {
             if (failure != null) { fail(failure); return; }
             updateNotification("Connected");
             setState("Connected");
+            synchronized (lifecycleLock) { healthyStable = false; }
+            scheduleProbe();
         } catch (Exception error) {
             Log.e("VpnService", "connect", error);
             fail(connectionFailure(error));
@@ -265,14 +272,25 @@ public final class VpnService extends android.net.VpnService {
         heartbeat.schedule(this::checkTunnel, 2, TimeUnit.SECONDS);
     }
 
+    private void scheduleProbe() {
+        long delay = healthyStable ? STABLE_PROBE_MS : RECOVER_PROBE_MS;
+        heartbeat.schedule(this::checkTunnel, delay, TimeUnit.MILLISECONDS);
+    }
+
     private void checkTunnel() {
         synchronized (lifecycleLock) { if (!running || connecting) return; }
         String failure = verifyTunnel();
         if (failure == null) {
-            synchronized (lifecycleLock) { failedProbes = 0; }
-            statusPrefs().edit().putLong(KEY_LAST_PROBE, System.currentTimeMillis()).apply();
+            synchronized (lifecycleLock) { failedProbes = 0; healthyStable = true; }
+            long now = System.currentTimeMillis();
+            if (now - lastProbeWrite > PROBE_WRITE_THROTTLE_MS) {
+                lastProbeWrite = now;
+                statusPrefs().edit().putLong(KEY_LAST_PROBE, now).apply();
+            }
+            scheduleProbe();
             return;
         }
+        synchronized (lifecycleLock) { healthyStable = false; }
         boolean reconnect;
         synchronized (lifecycleLock) {
             reconnect = ++failedProbes >= PROBE_FAIL_LIMIT && running && !connecting && autoReconnects < MAX_AUTO_RECONNECTS;
@@ -282,6 +300,7 @@ public final class VpnService extends android.net.VpnService {
         }
         if (reconnect) reconnectTunnel();
         else if (!running) fail("Cannot connect: check server, port, path, SNI, and Host");
+        else scheduleProbe();
     }
 
     private String verifyTunnel() {

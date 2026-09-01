@@ -72,7 +72,7 @@ public final class MainActivity extends AppCompatActivity {
         SharedPreferences vpnStatus = getSharedPreferences("vpn_status", MODE_PRIVATE);
         String value = vpnStatus.getString("state", "Disconnected");
         long lastSeen = vpnStatus.getLong("last_seen", 0);
-        if ("Connected".equals(value) && System.currentTimeMillis() - lastSeen > 10_000) value = "Disconnected";
+        if ("Connected".equals(value) && System.currentTimeMillis() - lastSeen > 35_000) value = "Disconnected";
         onVpnState(value);
     }
 
