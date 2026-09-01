@@ -5,4 +5,5 @@
     <item android:id="@+id/action_export_clipboard" android:title="Export Clipboard" />
     <item android:id="@+id/action_export_file" android:title="Export .jvs File" />
     <item android:id="@+id/action_hwid" android:title="Copy HWID" />
+    <item android:id="@+id/action_traffic" android:title="Show Traffic Meter" android:checkable="true" />
 </menu>

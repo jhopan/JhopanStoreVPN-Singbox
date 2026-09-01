@@ -40,7 +40,10 @@ public final class MainActivity extends AppCompatActivity {
     private String hwid;
     private Button connect;
     private boolean connected;
-    private long startRx = -1, startTx = -1, lastRx, lastTx, lastSample;
+    private boolean showTraffic = true;
+    private long totalRx, totalTx, lastRx, lastTx, lastSample;
+    private boolean hasBaseline;
+    private int uid;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -53,6 +56,11 @@ public final class MainActivity extends AppCompatActivity {
         status = findViewById(R.id.status); traffic = findViewById(R.id.traffic); connect = findViewById(R.id.connect);
         load();
         hwid = installationHwid();
+        uid = android.os.Process.myUid();
+        totalRx = prefs.getLong("traffic_total_rx", 0);
+        totalTx = prefs.getLong("traffic_total_tx", 0);
+        showTraffic = prefs.getBoolean("show_traffic", true);
+        traffic.setVisibility(showTraffic ? android.view.View.VISIBLE : android.view.View.GONE);
         connect.setOnClickListener(v -> { if (connected) disconnect(); else requestConnect(); });
 
         VpnService.setListener(value -> runOnUiThread(() -> onVpnState(value)));
@@ -79,10 +87,12 @@ public final class MainActivity extends AppCompatActivity {
     @Override protected void onPause() {
         super.onPause();
         handler.removeCallbacks(trafficTask);
+        saveTotals();
     }
 
     @Override public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.main_menu, menu);
+        menu.findItem(R.id.action_traffic).setChecked(showTraffic);
         return true;
     }
 
@@ -93,7 +103,17 @@ public final class MainActivity extends AppCompatActivity {
         if (id == R.id.action_export_clipboard) { copy(exportLink()); return true; }
         if (id == R.id.action_export_file) { createExportFile(); return true; }
         if (id == R.id.action_hwid) { copy(hwid); return true; }
+        if (id == R.id.action_traffic) { toggleTraffic(); return true; }
         return super.onOptionsItemSelected(item);
+    }
+
+    private void toggleTraffic() {
+        showTraffic = !showTraffic;
+        prefs.edit().putBoolean("show_traffic", showTraffic).apply();
+        traffic.setVisibility(showTraffic ? android.view.View.VISIBLE : android.view.View.GONE);
+        hasBaseline = false;
+        invalidateOptionsMenu();
+        show(showTraffic ? "Traffic meter on" : "Traffic meter off");
     }
 
     private void openImportFile() {
@@ -143,24 +163,28 @@ public final class MainActivity extends AppCompatActivity {
 
     private final Runnable trafficTask = new Runnable() {
         @Override public void run() {
-            if (connected) updateTraffic();
+            if (connected && showTraffic) updateTraffic();
             handler.postDelayed(this, 2000);
         }
     };
 
     private void updateTraffic() {
-        long rx = android.net.TrafficStats.getUidRxBytes(android.os.Process.myUid());
-        long tx = android.net.TrafficStats.getUidTxBytes(android.os.Process.myUid());
+        long rx = android.net.TrafficStats.getUidRxBytes(uid);
+        long tx = android.net.TrafficStats.getUidTxBytes(uid);
         if (rx < 0 || tx < 0) { traffic.setText("Traffic: unavailable"); return; }
         long now = System.currentTimeMillis();
-        if (startRx < 0) { startRx = lastRx = rx; startTx = lastTx = tx; lastSample = now; }
+        if (!hasBaseline) { lastRx = rx; lastTx = tx; lastSample = now; hasBaseline = true; }
+        long dRx = rx - lastRx, dTx = tx - lastTx;
+        if (dRx < 0 || dTx < 0) { lastRx = rx; lastTx = tx; lastSample = now; return; }
+        totalRx += dRx; totalTx += dTx;
         long elapsed = Math.max(1, now - lastSample);
-        long downRate = (rx - lastRx) * 1000 / elapsed, upRate = (tx - lastTx) * 1000 / elapsed;
-        traffic.setText("↓ " + bytes(rx - startRx) + " (" + bytes(downRate) + "/s)   ↑ " + bytes(tx - startTx) + " (" + bytes(upRate) + "/s)");
+        long downRate = dRx * 1000 / elapsed, upRate = dTx * 1000 / elapsed;
+        traffic.setText("↓ " + bytes(totalRx) + " (" + bytes(downRate) + "/s)   ↑ " + bytes(totalTx) + " (" + bytes(upRate) + "/s)");
         lastRx = rx; lastTx = tx; lastSample = now;
     }
 
-    private void resetTraffic() { startRx = startTx = -1; traffic.setText("Traffic: -"); }
+    private void resetTraffic() { hasBaseline = false; if (showTraffic) traffic.setText("↓ " + bytes(totalRx) + "   ↑ " + bytes(totalTx)); }
+    private void saveTotals() { prefs.edit().putLong("traffic_total_rx", totalRx).putLong("traffic_total_tx", totalTx).apply(); }
     private static String bytes(long value) { return value < 1024 ? value + " B" : value < 1048576 ? String.format("%.1f KB", value / 1024d) : String.format("%.2f MB", value / 1048576d); }
 
     private void importText(String text) {
@@ -211,5 +235,5 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void show(String value) { Toast.makeText(this, value == null ? "Error" : value, Toast.LENGTH_SHORT).show(); }
-    @Override protected void onDestroy() { VpnService.setListener(null); handler.removeCallbacks(trafficTask); super.onDestroy(); }
+    @Override protected void onDestroy() { VpnService.setListener(null); handler.removeCallbacks(trafficTask); saveTotals(); super.onDestroy(); }
 }
