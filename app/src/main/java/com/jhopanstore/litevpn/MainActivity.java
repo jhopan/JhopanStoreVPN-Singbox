@@ -58,7 +58,6 @@ public final class MainActivity extends AppCompatActivity {
         VpnService.setListener(value -> runOnUiThread(() -> onVpnState(value)));
         requestNotificationPermission();
         handleSharedFile(getIntent());
-        handler.post(trafficTask);
     }
 
     @Override protected void onNewIntent(Intent intent) {
@@ -74,6 +73,12 @@ public final class MainActivity extends AppCompatActivity {
         long lastSeen = vpnStatus.getLong("last_seen", 0);
         if ("Connected".equals(value) && System.currentTimeMillis() - lastSeen > 35_000) value = "Disconnected";
         onVpnState(value);
+        handler.post(trafficTask);
+    }
+
+    @Override protected void onPause() {
+        super.onPause();
+        handler.removeCallbacks(trafficTask);
     }
 
     @Override public boolean onCreateOptionsMenu(Menu menu) {
@@ -139,7 +144,7 @@ public final class MainActivity extends AppCompatActivity {
     private final Runnable trafficTask = new Runnable() {
         @Override public void run() {
             if (connected) updateTraffic();
-            handler.postDelayed(this, 1000);
+            handler.postDelayed(this, 2000);
         }
     };
 
