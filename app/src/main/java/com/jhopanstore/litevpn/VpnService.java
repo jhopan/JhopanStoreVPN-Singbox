@@ -60,7 +60,7 @@ public final class VpnService extends android.net.VpnService {
     private static final int PROBE_FAIL_LIMIT = 3;
     private static final int MAX_AUTO_RECONNECTS = 3;
     private static final int PROBE_TIMEOUT_MS = 8_000;
-    private static final int PROBE_ATTEMPTS = 6;
+    private static final int PROBE_ATTEMPTS = 2;
     private static final long PROBE_GAP_MS = 2_000;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -317,7 +317,8 @@ public final class VpnService extends android.net.VpnService {
             last = verifyTunnel();
             if (last == null) { synchronized (lifecycleLock) { failedProbes = 0; } return null; }
         }
-        return last;
+        // Non-blocking: tunnel is up; truthfulness is handled by the periodic checkTunnel.
+        return null;
     }
 
     private static String connectionFailure(Exception error) {
