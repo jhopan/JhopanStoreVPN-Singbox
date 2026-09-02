@@ -4,8 +4,10 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.LinkProperties;
@@ -80,6 +82,9 @@ public final class VpnService extends android.net.VpnService {
     private int failedProbes;
     private boolean healthyStable;
     private long lastProbeWrite;
+    private final BroadcastReceiver screenReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) { scheduleHealthCheck(); }
+    };
 
     public static void setListener(Listener value) { listener = value; }
     public static void start(Context context, String uri) {
@@ -99,6 +104,11 @@ public final class VpnService extends android.net.VpnService {
         } catch (Exception error) { Log.e("VpnService", "libbox setup", error); }
         heartbeat.scheduleAtFixedRate(this::writeHeartbeat, 0, HEARTBEAT_MS, TimeUnit.MILLISECONDS);
         scheduleProbe();
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_SCREEN_ON);
+        filter.addAction(Intent.ACTION_USER_PRESENT);
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        else registerReceiver(screenReceiver, filter);
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
@@ -109,7 +119,7 @@ public final class VpnService extends android.net.VpnService {
         String uri = intent == null ? statusPrefs().getString(KEY_URI, null) : intent.getStringExtra(EXTRA_URI);
         if (uri == null) { setState("Disconnected"); stopSelf(); return START_NOT_STICKY; }
         synchronized (lifecycleLock) {
-            if (running || connecting) return START_STICKY;
+            if (running || connecting) { closeCore(); running = false; connecting = false; failedProbes = 0; }
             connecting = true;
         }
         statusPrefs().edit().putString(KEY_URI, uri).apply();
@@ -382,7 +392,7 @@ public final class VpnService extends android.net.VpnService {
         state("Disconnected");
         stopSelf();
     }
-    @Override public void onDestroy() { boolean failed; synchronized (lifecycleLock) { running = false; connecting = false; failed = terminalFailure; } closeCore(); heartbeat.shutdownNow(); worker.shutdownNow(); if (!failed) statusPrefs().edit().putString(KEY_STATE, "Disconnected").putLong(KEY_LAST_SEEN, 0).putLong(KEY_LAST_PROBE, 0).apply(); super.onDestroy(); }
+    @Override public void onDestroy() { boolean failed; synchronized (lifecycleLock) { running = false; connecting = false; failed = terminalFailure; } closeCore(); heartbeat.shutdownNow(); worker.shutdownNow(); try { unregisterReceiver(screenReceiver); } catch (Exception ignored) {} if (!failed) statusPrefs().edit().putString(KEY_STATE, "Disconnected").putLong(KEY_LAST_SEEN, 0).putLong(KEY_LAST_PROBE, 0).apply(); super.onDestroy(); }
     @Override public void onRevoke() { disconnect(); super.onRevoke(); }
 
     private void createChannel() {
