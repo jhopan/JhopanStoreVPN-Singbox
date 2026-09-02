@@ -32,6 +32,22 @@
                 android:contentDescription="JhopanStore VPN" />
 
             <TextView
+                android:id="@+id/lockBanner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:gravity="center"
+                android:textStyle="bold"
+                android:textColor="#4CAF50"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/configFields"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="24dp"
@@ -125,6 +141,8 @@
                 android:background="#222222"
                 android:padding="8dp"
                 android:singleLine="true" />
+
+            </LinearLayout>
 
             <Button
                 android:id="@+id/connect"

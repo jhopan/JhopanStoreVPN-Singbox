@@ -23,12 +23,18 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.content.ContextCompat;
+import com.jhopanstore.litevpn.core.Installation;
+import com.jhopanstore.litevpn.core.License;
+import com.jhopanstore.litevpn.core.LicenseCodec;
 import com.jhopanstore.litevpn.core.VlessConfig;
 import com.jhopanstore.litevpn.core.VlessParser;
 import java.io.BufferedReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.UUID;
 
 public final class MainActivity extends AppCompatActivity {
@@ -41,6 +47,10 @@ public final class MainActivity extends AppCompatActivity {
     private EditText address, uuid, path, sni, host;
     private TextView status, traffic;
     private String hwid;
+    private android.view.View configFields;
+    private android.widget.TextView lockBanner;
+    private License license;
+    private boolean pendingLicenseExport;
     private Button connect;
     private boolean connected;
     private boolean showTraffic = true;
@@ -57,7 +67,9 @@ public final class MainActivity extends AppCompatActivity {
         prefs = getSharedPreferences("vpn", MODE_PRIVATE);
         address = findViewById(R.id.address); uuid = findViewById(R.id.uuid); path = findViewById(R.id.path); sni = findViewById(R.id.sni); host = findViewById(R.id.host);
         status = findViewById(R.id.status); traffic = findViewById(R.id.traffic); connect = findViewById(R.id.connect);
+        configFields = findViewById(R.id.configFields); lockBanner = findViewById(R.id.lockBanner);
         load();
+        loadLicense();
         hwid = installationHwid();
         uid = android.os.Process.myUid();
         totalRx = prefs.getLong("traffic_total_rx", 0);
@@ -126,6 +138,8 @@ public final class MainActivity extends AppCompatActivity {
         if (id == R.id.action_export_clipboard) { copy(exportLink()); return true; }
         if (id == R.id.action_export_file) { createExportFile(); return true; }
         if (id == R.id.action_hwid) { copy(hwid); return true; }
+        if (id == R.id.action_export_license) { exportLicense(); return true; }
+        if (id == R.id.action_import_license) { openLicenseImport(); return true; }
         if (id == R.id.action_traffic) { toggleTraffic(); return true; }
         return super.onOptionsItemSelected(item);
     }
@@ -162,20 +176,29 @@ public final class MainActivity extends AppCompatActivity {
 
     private void requestConnect() {
         try {
-            VlessParser.parse(exportLink());
+            String uri = activeUri();
+            VlessParser.parse(uri);
             Intent intent = android.net.VpnService.prepare(this);
-            if (intent == null) connect(); else startActivityForResult(intent, VPN_PERMISSION);
+            if (intent == null) connect(uri); else startActivityForResult(intent, VPN_PERMISSION);
         } catch (Exception error) { show(error.getMessage()); }
+    }
+
+    private String activeUri() {
+        if (license != null && license.lock) {
+            if (LicenseCodec.expired(license)) { show("Lisensi kedaluwarsa"); throw new IllegalStateException("expired"); }
+            return license.vless;
+        }
+        return exportLink();
     }
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
-        if (request == VPN_PERMISSION && result == RESULT_OK) connect();
+        if (request == VPN_PERMISSION && result == RESULT_OK) connect(activeUri());
         if (request == IMPORT_FILE && result == RESULT_OK && data != null && data.getData() != null) readImport(data.getData());
         if (request == EXPORT_FILE && result == RESULT_OK && data != null && data.getData() != null) writeExport(data.getData());
     }
 
-    private void connect() { save(); VpnService.start(this, exportLink()); }
+    private void connect(String uri) { save(); VpnService.start(this, uri); }
     private void disconnect() { VpnService.stop(this); }
     private void onVpnState(String value) {
         status.setText(value);

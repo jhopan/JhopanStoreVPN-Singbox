@@ -5,5 +5,7 @@
     <item android:id="@+id/action_export_clipboard" android:title="Export Clipboard" />
     <item android:id="@+id/action_export_file" android:title="Export .jvs File" />
     <item android:id="@+id/action_hwid" android:title="Copy HWID" />
+    <item android:id="@+id/action_export_license" android:title="Export License (.jvs)" />
+    <item android:id="@+id/action_import_license" android:title="Import License (.jvs)" />
     <item android:id="@+id/action_traffic" android:title="Show Traffic Meter" android:checkable="true" />
 </menu>
