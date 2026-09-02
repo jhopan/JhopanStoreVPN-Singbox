@@ -23,7 +23,7 @@ public final class SingboxConfig {
             .put("insecure", config.allowInsecure);
         JSONObject ws = new JSONObject().put("type", "ws").put("path", config.path).put("headers", new JSONObject().put("Host", config.host));
         root.put("outbounds", new JSONArray()
-            .put(new JSONObject().put("type", "vless").put("tag", "proxy").put("server", config.address).put("server_port", config.port).put("uuid", config.uuid).put("tls", tls).put("transport", ws))
+            .put(new JSONObject().put("type", "vless").put("tag", "proxy").put("server", config.address).put("server_port", config.port).put("uuid", config.uuid).put("domain_strategy", "prefer_ipv4").put("tls", tls).put("transport", ws))
             .put(new JSONObject().put("type", "direct").put("tag", "direct"))
             .put(new JSONObject().put("type", "block").put("tag", "block"))
             .put(new JSONObject().put("type", "dns").put("tag", "dns-out")));
