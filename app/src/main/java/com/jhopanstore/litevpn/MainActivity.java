@@ -11,12 +11,15 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
+import android.provider.Settings;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.content.ContextCompat;
@@ -65,7 +68,27 @@ public final class MainActivity extends AppCompatActivity {
 
         VpnService.setListener(value -> runOnUiThread(() -> onVpnState(value)));
         requestNotificationPermission();
+        batteryGuard();
         handleSharedFile(getIntent());
+    }
+
+    private void batteryGuard() {
+        if (prefs.getBoolean("battery_guard_asked", false)) return;
+        prefs.edit().putBoolean("battery_guard_asked", true).apply();
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        if (pm == null || pm.isIgnoringBatteryOptimizations(getPackageName())) return;
+        new AlertDialog.Builder(this)
+            .setTitle("Mode 24/7")
+            .setMessage("Agar VPN tetap hidup saat layar mati, matikan penghemat daya (battery optimization) untuk JhopanStore VPN dan aktifkan Autostart di pengaturan." )
+            .setPositiveButton("Matikan penghemat daya", (d, w) -> {
+                try {
+                    startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getPackageName())));
+                } catch (Exception error) {
+                    startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+                }
+            })
+            .setNegativeButton("Nanti", null)
+            .show();
     }
 
     @Override protected void onNewIntent(Intent intent) {
