@@ -79,7 +79,7 @@ public final class MainActivity extends AppCompatActivity {
         if (pm == null || pm.isIgnoringBatteryOptimizations(getPackageName())) return;
         new AlertDialog.Builder(this)
             .setTitle("Mode 24/7")
-            .setMessage("Agar VPN tetap hidup saat layar mati, matikan penghemat daya (battery optimization) untuk JhopanStore VPN dan aktifkan Autostart di pengaturan." )
+            .setMessage("Agar VPN tetap hidup saat layar mati, matikan penghemat daya (battery optimization) dan aktifkan Autostart untuk JhopanStore VPN." )
             .setPositiveButton("Matikan penghemat daya", (d, w) -> {
                 try {
                     startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getPackageName())));
@@ -87,8 +87,23 @@ public final class MainActivity extends AppCompatActivity {
                     startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
                 }
             })
+            .setNeutralButton("Aktifkan Autostart", (d, w) -> openAutostartSetting())
             .setNegativeButton("Nanti", null)
             .show();
+    }
+
+    private void openAutostartSetting() {
+        try {
+            startActivity(new Intent("miui.intent.action.OP_AUTO_START").addCategory(Intent.CATEGORY_DEFAULT));
+        } catch (Exception error) {
+            try {
+                startActivity(new Intent().setComponent(new android.content.ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")));
+            } catch (Exception error2) {
+                try {
+                    startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
+                } catch (Exception ignored) {}
+            }
+        }
     }
 
     @Override protected void onNewIntent(Intent intent) {
