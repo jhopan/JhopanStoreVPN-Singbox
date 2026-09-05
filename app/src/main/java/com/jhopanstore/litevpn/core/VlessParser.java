@@ -3,7 +3,6 @@ package com.jhopanstore.litevpn.core;
 import android.net.Uri;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 public final class VlessParser {
@@ -37,5 +36,8 @@ public final class VlessParser {
         return value == null || value.isEmpty() ? fallback : value;
     }
 
-    private static String encode(String value) { return URLEncoder.encode(value, StandardCharsets.UTF_8); }
+    private static String encode(String value) {
+        try { return URLEncoder.encode(value, "UTF-8"); }
+        catch (java.io.UnsupportedEncodingException error) { return value; }
+    }
 }
