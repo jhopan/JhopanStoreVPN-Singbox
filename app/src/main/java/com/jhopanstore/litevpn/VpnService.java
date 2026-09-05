@@ -175,7 +175,7 @@ public final class VpnService extends android.net.VpnService {
         @Override public void clearDNSCache() {}
         @Override public void closeDefaultInterfaceMonitor(InterfaceUpdateListener value) { stopNetworkMonitor(); }
         @Override public int findConnectionOwner(int protocol, String source, int sourcePort, String destination, int destinationPort) { return 0; }
-        @Override public NetworkInterfaceIterator getInterfaces() { return new InterfaceIterator(readInterfaces()); }
+        @Override public NetworkInterfaceIterator getInterfaces() { return new InterfaceIterator(Collections.emptyList()); }
         @Override public boolean includeAllNetworks() { return false; }
         @Override public String packageNameByUid(int uid) { return ""; }
         @Override public WIFIState readWIFIState() { return null; }
@@ -186,38 +186,6 @@ public final class VpnService extends android.net.VpnService {
         @Override public boolean usePlatformAutoDetectInterfaceControl() { return true; }
         @Override public boolean useProcFS() { return false; }
         @Override public void writeLog(String message) { Log.i("libbox", message); }
-    }
-
-    private List<io.github.sagernet.libbox.libbox.NetworkInterface> readInterfaces() {
-        try {
-            List<io.github.sagernet.libbox.libbox.NetworkInterface> result = new ArrayList<>();
-            Enumeration<java.net.NetworkInterface> source = java.net.NetworkInterface.getNetworkInterfaces();
-            while (source != null && source.hasMoreElements()) {
-                java.net.NetworkInterface item = source.nextElement();
-                io.github.sagernet.libbox.libbox.NetworkInterface output = new io.github.sagernet.libbox.libbox.NetworkInterface();
-                output.setIndex(item.getIndex()); output.setName(item.getName()); output.setMTU(item.getMTU());
-                int flags = item.isUp() ? 0x41 : 0;
-                if (item.isLoopback()) flags |= 0x8;
-                if (item.isPointToPoint()) flags |= 0x10; else if (!item.isLoopback()) flags |= 0x2;
-                if (item.supportsMulticast()) flags |= 0x1000;
-                output.setFlags(flags); output.setType(interfaceType(item.getName())); output.setMetered(false);
-                List<String> addresses = new ArrayList<>();
-                for (java.net.InterfaceAddress address : item.getInterfaceAddresses()) {
-                    String value = address.getAddress().getHostAddress();
-                    if (value != null) addresses.add(value.split("%")[0] + "/" + address.getNetworkPrefixLength());
-                }
-                output.setAddresses(new Strings(addresses)); output.setDNSServer(new Strings(Collections.emptyList()));
-                result.add(output);
-            }
-            return result;
-        } catch (Exception error) { Log.w("VpnService", "get interfaces", error); return Collections.emptyList(); }
-    }
-
-    private static int interfaceType(String name) {
-        if (name.startsWith("wlan") || name.startsWith("wl")) return 0;
-        if (name.startsWith("rmnet") || name.startsWith("ccmni") || name.startsWith("pdp")) return 1;
-        if (name.startsWith("eth")) return 2;
-        return 3;
     }
 
     private synchronized void startNetworkMonitor(InterfaceUpdateListener value) {
