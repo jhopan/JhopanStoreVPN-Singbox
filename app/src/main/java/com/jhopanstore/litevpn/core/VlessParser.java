@@ -1,7 +1,6 @@
 package com.jhopanstore.litevpn.core;
 
 import android.net.Uri;
-import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.util.UUID;
 
