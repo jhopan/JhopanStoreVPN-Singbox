@@ -27,7 +27,7 @@ public final class SingboxConfig {
             .put(new JSONObject().put("type", "direct").put("tag", "direct"))
             .put(new JSONObject().put("type", "block").put("tag", "block"))
             .put(new JSONObject().put("type", "dns").put("tag", "dns-out")));
-        root.put("route", new JSONObject().put("auto_detect_interface", true)
+        root.put("route", new JSONObject().put("auto_detect_interface", false).put("override_android_vpn", true)
             .put("rules", new JSONArray().put(new JSONObject().put("protocol", "dns").put("outbound", "dns-out")))
             .put("final", "proxy"));
         root.put("experimental", new JSONObject().put("cache_file", new JSONObject().put("enabled", true).put("path", cachePath + "/cache.db")));
