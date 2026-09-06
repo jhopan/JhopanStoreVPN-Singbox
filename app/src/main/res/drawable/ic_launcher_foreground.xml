@@ -6,15 +6,15 @@
     android:viewportWidth="1024"
     android:viewportHeight="1024">
     <path
-        android:pathData="M286,512m-174,0a174,174 0,1 1,348 0a174,174 0,1 1,-348 0Z M286,512m-92,0a92,92 0,1 0,184 0a92,92 0,1 0,-184 0Z M400,468H794a44,44 0,0 1,0 88H400Z M588,556h96v100a48,48 0,0 1,-96 0Z M712,556h82v100a41,41 0,0 1,-82 0Z"
+        android:pathData="M348,512m-220,0a220,220 0,1 1,440 0a220,220 0,1 1,-440 0Z M348,512m-118,0a118,118 0,1 0,236 0a118,118 0,1 0,-236 0Z M452,462H800a50,50 0,0 1,0 100H452Z M612,562h104v120a52,52 0,0 1,-104 0Z M748,562h96v120a48,48 0,0 1,-96 0Z"
         android:fillType="evenOdd">
         <aapt:attr name="android:fillColor">
             <gradient
                 android:type="linear"
-                android:startX="112" android:startY="338"
-                android:endX="838" android:endY="686">
-                <item android:offset="0" android:color="#FF00D4FF"/>
-                <item android:offset="1" android:color="#FF0066FF"/>
+                android:startX="128" android:startY="292"
+                android:endX="896" android:endY="732">
+                <item android:offset="0" android:color="#FF00E5FF"/>
+                <item android:offset="1" android:color="#FF0057FF"/>
             </gradient>
         </aapt:attr>
     </path>
