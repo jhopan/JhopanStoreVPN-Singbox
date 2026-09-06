@@ -136,7 +136,13 @@ public final class VpnService extends android.net.VpnService {
             closeCore();
             service = Libbox.newService(json, new Platform());
             service.start();
-            synchronized (lifecycleLock) { connecting = false; running = true; terminalFailure = false; failedProbes = 0; autoReconnects = 0; }
+            synchronized (lifecycleLock) {
+                if (!connecting) { // user pressed DISCONNECT while we were building: honor it
+                    closeCore();
+                    return;
+                }
+                connecting = false; running = true; terminalFailure = false; failedProbes = 0; autoReconnects = 0;
+            }
             updateNotification("Checking internet…");
             setState("Checking internet…");
             String failure = awaitHealthyTunnel();
@@ -258,17 +264,18 @@ public final class VpnService extends android.net.VpnService {
             scheduleProbe();
             return;
         }
-        synchronized (lifecycleLock) { healthyStable = false; }
+        synchronized (lifecycleLock) {
+            if (!running || connecting) return; // user disconnected or reconnect in progress: never override status
+            healthyStable = false;
+        }
         boolean reconnect;
         synchronized (lifecycleLock) {
-            reconnect = ++failedProbes >= PROBE_FAIL_LIMIT && running && !connecting && autoReconnects < MAX_AUTO_RECONNECTS;
+            reconnect = ++failedProbes >= PROBE_FAIL_LIMIT && autoReconnects < MAX_AUTO_RECONNECTS;
             if (reconnect) { running = false; connecting = true; failedProbes = 0; autoReconnects++; }
-            else if (failedProbes >= PROBE_FAIL_LIMIT && running && !connecting) { running = false; connecting = true; failedProbes = 0; }
             else { failedProbes = 0; }
         }
         if (reconnect) reconnectTunnel();
-        else if (!running) fail("Cannot connect: check server, port, path, SNI, and Host");
-        else scheduleProbe();
+        else fail("Cannot connect: check server, port, path, SNI, and Host");
     }
 
     private String verifyTunnel() {

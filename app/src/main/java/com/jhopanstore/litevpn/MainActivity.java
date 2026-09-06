@@ -57,6 +57,9 @@ public final class MainActivity extends AppCompatActivity {
         prefs = getSharedPreferences("vpn", MODE_PRIVATE);
         address = findViewById(R.id.address); uuid = findViewById(R.id.uuid); path = findViewById(R.id.path); sni = findViewById(R.id.sni); host = findViewById(R.id.host);
         status = findViewById(R.id.status); traffic = findViewById(R.id.traffic); connect = findViewById(R.id.connect);
+        TextView version = findViewById(R.id.version);
+        try { version.setText("v" + getPackageManager().getPackageInfo(getPackageName(), 0).versionName); }
+        catch (Exception ignored) { version.setVisibility(android.view.View.GONE); }
         load();
         hwid = installationHwid();
         uid = android.os.Process.myUid();
@@ -224,6 +227,7 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void requestConnect() {
+        if (connected) return; // guard spam-click
         try {
             VlessParser.parse(exportLink());
             Intent intent = android.net.VpnService.prepare(this);
@@ -244,6 +248,8 @@ public final class MainActivity extends AppCompatActivity {
         status.setText(value);
         connected = "Connected".equals(value) || "Connecting…".equals(value) || "Checking internet…".equals(value) || "Reconnecting…".equals(value);
         connect.setText(connected ? "DISCONNECT" : "CONNECT");
+        connect.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor(connected ? "#E53935" : "#4CAF50")));
+        connect.setEnabled(!"Connecting…".equals(value) && !"Checking internet…".equals(value));
         if (!connected) resetTraffic();
     }
 
