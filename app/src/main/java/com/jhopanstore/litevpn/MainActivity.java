@@ -117,9 +117,23 @@ public final class MainActivity extends AppCompatActivity {
         SharedPreferences vpnStatus = getSharedPreferences("vpn_status", MODE_PRIVATE);
         String value = vpnStatus.getString("state", "Disconnected");
         long lastSeen = vpnStatus.getLong("last_seen", 0);
-        if ("Connected".equals(value) && System.currentTimeMillis() - lastSeen > 35_000) value = "Disconnected";
+        if ("Connected".equals(value) && System.currentTimeMillis() - lastSeen > 35_000) {
+            value = "Disconnected";
+            killedBySystemHint();
+        }
         onVpnState(value);
         handler.post(trafficTask);
+    }
+
+    private void killedBySystemHint() {
+        if (prefs.getBoolean("kill_hint_shown", false)) return;
+        prefs.edit().putBoolean("kill_hint_shown", true).apply();
+        new AlertDialog.Builder(this)
+            .setTitle("VPN dimatikan sistem")
+            .setMessage("Android/penghemat daya mematikan VPN saat tidak dipakai. Agar tetap hidup 24/7:\n\n1. Matikan penghemat daya untuk JhopanStore VPN\n2. Aktifkan Autostart\n3. Kunci aplikasi di Recents ( Recent → tahan ikon → gembok )\n\nTekan Buka Pengaturan untuk melanjutkan.")
+            .setPositiveButton("Buka pengaturan", (d, w) -> openAutostartSetting())
+            .setNegativeButton("Tutup", null)
+            .show();
     }
 
     @Override protected void onPause() {
