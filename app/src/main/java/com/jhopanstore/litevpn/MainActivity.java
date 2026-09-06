@@ -199,7 +199,7 @@ public final class MainActivity extends AppCompatActivity {
         showTraffic = !showTraffic;
         prefs.edit().putBoolean("show_traffic", showTraffic).apply();
         traffic.setVisibility(showTraffic ? android.view.View.VISIBLE : android.view.View.GONE);
-        hasBaseline = false;
+        if (showTraffic) { hasBaseline = false; updateTraffic(); }
         invalidateOptionsMenu();
         show(showTraffic ? "Traffic meter on" : "Traffic meter off");
     }
