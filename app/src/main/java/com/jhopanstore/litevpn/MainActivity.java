@@ -130,10 +130,20 @@ public final class MainActivity extends AppCompatActivity {
         prefs.edit().putBoolean("kill_hint_shown", true).apply();
         new AlertDialog.Builder(this)
             .setTitle("VPN dimatikan sistem")
-            .setMessage("Android/penghemat daya mematikan VPN saat tidak dipakai. Agar tetap hidup 24/7:\n\n1. Matikan penghemat daya untuk JhopanStore VPN\n2. Aktifkan Autostart\n3. Kunci aplikasi di Recents ( Recent → tahan ikon → gembok )\n\nTekan Buka Pengaturan untuk melanjutkan.")
-            .setPositiveButton("Buka pengaturan", (d, w) -> openAutostartSetting())
+            .setMessage("Android/penghemat daya mematikan VPN saat tidak dipakai. Agar tetap hidup 24/7:\n\n1. Matikan penghemat daya untuk JhopanStore VPN\n2. Aktifkan Autostart\n3. Kunci aplikasi di Recents ( Recent → tahan ikon → gembok )")
+            .setPositiveButton("Matikan penghemat daya", (d, w) -> openBatterySetting())
+            .setNeutralButton("Aktifkan Autostart", (d, w) -> openAutostartSetting())
             .setNegativeButton("Tutup", null)
             .show();
+    }
+
+    private void openBatterySetting() {
+        try {
+            startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getPackageName())));
+        } catch (Exception error) {
+            try { startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)); }
+            catch (Exception ignored) {}
+        }
     }
 
     @Override protected void onPause() {
