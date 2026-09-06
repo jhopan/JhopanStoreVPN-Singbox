@@ -400,6 +400,15 @@ public final class VpnService extends android.net.VpnService {
     }
     @Override public void onDestroy() { boolean failed; synchronized (lifecycleLock) { running = false; connecting = false; failed = terminalFailure; } closeCore(); heartbeat.shutdownNow(); worker.shutdownNow(); try { unregisterReceiver(screenReceiver); } catch (Exception ignored) {} if (!failed) statusPrefs().edit().putString(KEY_STATE, "Disconnected").putLong(KEY_LAST_SEEN, 0).putLong(KEY_LAST_PROBE, 0).apply(); super.onDestroy(); }
     @Override public void onRevoke() { disconnect(); super.onRevoke(); }
+    @Override public void onTaskRemoved(Intent rootIntent) {
+        if (running && !connecting) { // user swiped app away: keep VPN alive
+            Intent restart = new Intent(getApplicationContext(), VpnService.class)
+                .putExtra(EXTRA_URI, statusPrefs().getString(KEY_URI, null));
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(restart);
+            else startService(restart);
+        }
+        super.onTaskRemoved(rootIntent);
+    }
 
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

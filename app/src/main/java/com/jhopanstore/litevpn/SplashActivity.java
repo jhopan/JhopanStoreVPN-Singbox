@@ -27,9 +27,8 @@ public final class SplashActivity extends Activity {
         root.setBackgroundColor(Color.rgb(18, 18, 18));
 
         ImageView icon = new ImageView(this);
-        icon.setImageResource(R.drawable.ic_vpn_key);
-        icon.setColorFilter(Color.rgb(76, 175, 80));
-        root.addView(icon, new LinearLayout.LayoutParams(dp(72), dp(72)));
+        icon.setImageResource(R.drawable.ic_launcher_foreground);
+        root.addView(icon, new LinearLayout.LayoutParams(dp(96), dp(96)));
 
         TextView title = new TextView(this);
         title.setText("JhopanStore VPN");
