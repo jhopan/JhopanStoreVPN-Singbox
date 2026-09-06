@@ -65,8 +65,8 @@ public final class VpnService extends android.net.VpnService {
     private static final int PROBE_ATTEMPTS = 2;
     private static final long PROBE_GAP_MS = 2_000;
 
-    private final ExecutorService worker = Executors.newSingleThreadExecutor();
-    private final ScheduledExecutorService heartbeat = Executors.newSingleThreadScheduledExecutor();
+    private ExecutorService worker = Executors.newSingleThreadExecutor();
+    private ScheduledExecutorService heartbeat = Executors.newSingleThreadScheduledExecutor();
     private final Object lifecycleLock = new Object();
     private BoxService service;
     private ParcelFileDescriptor tun;
@@ -110,6 +110,11 @@ public final class VpnService extends android.net.VpnService {
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) { disconnect(); return START_NOT_STICKY; }
+        if (heartbeat.isShutdown()) { // reused instance after stopSelf(): rebuild executors
+            heartbeat = Executors.newSingleThreadScheduledExecutor();
+            worker = Executors.newSingleThreadExecutor();
+            heartbeat.scheduleAtFixedRate(this::writeHeartbeat, 0, HEARTBEAT_MS, TimeUnit.MILLISECONDS);
+        }
         ConnectivityManager manager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
         NetworkCapabilities caps = manager.getNetworkCapabilities(manager.getActiveNetwork());
         if (caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) { fail("No network: turn on Wi-Fi or mobile data"); return START_NOT_STICKY; }
@@ -122,7 +127,10 @@ public final class VpnService extends android.net.VpnService {
         statusPrefs().edit().putString(KEY_URI, uri).apply();
         startForeground(NOTIFICATION_ID, notification("Connecting…"));
         setState("Connecting…");
-        worker.execute(() -> connect(uri));
+        worker.execute(() -> {
+            try { connect(uri); }
+            catch (Exception error) { Log.e("VpnService", "connect task", error); fail(connectionFailure(error)); }
+        });
         return START_STICKY;
     }
 
@@ -146,6 +154,7 @@ public final class VpnService extends android.net.VpnService {
             updateNotification("Checking internet…");
             setState("Checking internet…");
             String failure = awaitHealthyTunnel();
+            synchronized (lifecycleLock) { if (!running) { closeCore(); return; } } // disconnected while checking
             if (failure != null) { fail(failure); return; }
             updateNotification("Connected");
             setState("Connected");
@@ -171,7 +180,12 @@ public final class VpnService extends android.net.VpnService {
             Builder builder = new Builder().setSession("JhopanStore VPN").setMtu(options.getMTU());
             builder.addAddress("172.19.0.1", 30).addRoute("0.0.0.0", 0).addDnsServer("8.8.8.8").addDnsServer("8.8.4.4");
             try { builder.addDisallowedApplication(getPackageName()); } catch (Exception ignored) {}
-            tun = builder.establish();
+            try {
+                tun = builder.establish();
+                if (tun == null) Log.e("VpnService", "establish() returned null — VPN consent revoked or another VPN active");
+            } catch (Exception error) {
+                Log.e("VpnService", "establish() failed", error);
+            }
             return tun == null ? -1 : tun.getFd();
         }
         @Override public void autoDetectInterfaceControl(int fd) { if (!protect(fd)) Log.w("VpnService", "protect failed: " + fd); }
@@ -242,13 +256,17 @@ public final class VpnService extends android.net.VpnService {
         if (running) statusPrefs().edit().putLong(KEY_LAST_SEEN, System.currentTimeMillis()).apply();
     }
 
-    private void scheduleHealthCheck() {
-        heartbeat.schedule(this::checkTunnel, 2, TimeUnit.SECONDS);
+    private void scheduleProbe() {
+        if (heartbeat.isShutdown()) return;
+        long delay = healthyStable ? STABLE_PROBE_MS : RECOVER_PROBE_MS;
+        try { heartbeat.schedule(this::checkTunnel, delay, TimeUnit.MILLISECONDS); }
+        catch (Exception ignored) {}
     }
 
-    private void scheduleProbe() {
-        long delay = healthyStable ? STABLE_PROBE_MS : RECOVER_PROBE_MS;
-        heartbeat.schedule(this::checkTunnel, delay, TimeUnit.MILLISECONDS);
+    private void scheduleHealthCheck() {
+        if (heartbeat.isShutdown()) return;
+        try { heartbeat.schedule(this::checkTunnel, 2, TimeUnit.SECONDS); }
+        catch (Exception ignored) {}
     }
 
     private void checkTunnel() {

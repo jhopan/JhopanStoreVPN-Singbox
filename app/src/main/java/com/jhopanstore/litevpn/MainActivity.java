@@ -63,8 +63,7 @@ public final class MainActivity extends AppCompatActivity {
         load();
         hwid = installationHwid();
         uid = android.os.Process.myUid();
-        totalRx = prefs.getLong("traffic_total_rx", 0);
-        totalTx = prefs.getLong("traffic_total_tx", 0);
+        totalRx = 0; totalTx = 0;
         showTraffic = prefs.getBoolean("show_traffic", true);
         traffic.setVisibility(showTraffic ? android.view.View.VISIBLE : android.view.View.GONE);
         connect.setOnClickListener(v -> { if (connected) disconnect(); else requestConnect(); });
@@ -250,7 +249,8 @@ public final class MainActivity extends AppCompatActivity {
         connect.setText(connected ? "DISCONNECT" : "CONNECT");
         connect.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor(connected ? "#E53935" : "#4CAF50")));
         connect.setEnabled(!"Connecting…".equals(value) && !"Checking internet…".equals(value));
-        if (!connected) resetTraffic();
+        if ("Disconnected".equals(value)) { totalRx = 0; totalTx = 0; hasBaseline = false; if (showTraffic) traffic.setText("↓ 0 B   ↑ 0 B"); }
+        else if (!connected) resetTraffic();
     }
 
     private final Runnable trafficTask = new Runnable() {
@@ -261,22 +261,33 @@ public final class MainActivity extends AppCompatActivity {
     };
 
     private void updateTraffic() {
+        SharedPreferences vpnStatus = getSharedPreferences("vpn_status", MODE_PRIVATE);
+        totalRx = vpnStatus.getLong("session_rx", 0);
+        totalTx = vpnStatus.getLong("session_tx", 0);
+        long now = System.currentTimeMillis();
         long rx = android.net.TrafficStats.getUidRxBytes(uid);
         long tx = android.net.TrafficStats.getUidTxBytes(uid);
-        if (rx < 0 || tx < 0) { traffic.setText("Traffic: unavailable"); return; }
-        long now = System.currentTimeMillis();
-        if (!hasBaseline) { lastRx = rx; lastTx = tx; lastSample = now; hasBaseline = true; }
-        long dRx = rx - lastRx, dTx = tx - lastTx;
-        if (dRx < 0 || dTx < 0) { lastRx = rx; lastTx = tx; lastSample = now; return; }
-        totalRx += dRx; totalTx += dTx;
-        long elapsed = Math.max(1, now - lastSample);
-        long downRate = dRx * 1000 / elapsed, upRate = dTx * 1000 / elapsed;
+        long downRate = 0, upRate = 0;
+        if (rx >= 0 && tx >= 0) {
+            if (!hasBaseline) { lastRx = rx; lastTx = tx; lastSample = now; hasBaseline = true; }
+            long dRx = rx - lastRx, dTx = tx - lastTx;
+            if (dRx >= 0 && dTx >= 0) {
+                long elapsed = Math.max(1, now - lastSample);
+                downRate = dRx * 1000 / elapsed; upRate = dTx * 1000 / elapsed;
+            }
+            lastRx = rx; lastTx = tx; lastSample = now;
+        }
         traffic.setText("↓ " + bytes(totalRx) + " (" + bytes(downRate) + "/s)   ↑ " + bytes(totalTx) + " (" + bytes(upRate) + "/s)");
-        lastRx = rx; lastTx = tx; lastSample = now;
     }
 
-    private void resetTraffic() { hasBaseline = false; if (showTraffic) traffic.setText("↓ " + bytes(totalRx) + "   ↑ " + bytes(totalTx)); }
-    private void saveTotals() { prefs.edit().putLong("traffic_total_rx", totalRx).putLong("traffic_total_tx", totalTx).apply(); }
+    private void resetTraffic() {
+        hasBaseline = false;
+        SharedPreferences vpnStatus = getSharedPreferences("vpn_status", MODE_PRIVATE);
+        totalRx = vpnStatus.getLong("session_rx", 0);
+        totalTx = vpnStatus.getLong("session_tx", 0);
+        if (showTraffic) traffic.setText("↓ " + bytes(totalRx) + "   ↑ " + bytes(totalTx));
+    }
+    private void saveTotals() { }
     private static String bytes(long value) { return value < 1024 ? value + " B" : value < 1048576 ? String.format("%.1f KB", value / 1024d) : String.format("%.2f MB", value / 1048576d); }
 
     private void importText(String text) {
