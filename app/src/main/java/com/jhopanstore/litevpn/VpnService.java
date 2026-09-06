@@ -27,9 +27,7 @@ import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.SocketTimeoutException;
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -41,7 +39,6 @@ import io.github.sagernet.libbox.libbox.Libbox;
 import io.github.sagernet.libbox.libbox.NetworkInterfaceIterator;
 import io.github.sagernet.libbox.libbox.PlatformInterface;
 import io.github.sagernet.libbox.libbox.SetupOptions;
-import io.github.sagernet.libbox.libbox.StringIterator;
 import io.github.sagernet.libbox.libbox.TunOptions;
 import io.github.sagernet.libbox.libbox.WIFIState;
 
@@ -221,13 +218,6 @@ public final class VpnService extends android.net.VpnService {
         } catch (Exception error) { Log.w("VpnService", "report network", error); }
     }
 
-    private static final class Strings implements StringIterator {
-        private final List<String> values; private int position;
-        Strings(List<String> values) { this.values = values; }
-        @Override public boolean hasNext() { return position < values.size(); }
-        @Override public int len() { return values.size(); }
-        @Override public String next() { return values.get(position++); }
-    }
     private static final class InterfaceIterator implements NetworkInterfaceIterator {
         private final List<io.github.sagernet.libbox.libbox.NetworkInterface> values; private int position;
         InterfaceIterator(List<io.github.sagernet.libbox.libbox.NetworkInterface> values) { this.values = values; }
