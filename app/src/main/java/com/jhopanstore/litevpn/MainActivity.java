@@ -73,23 +73,36 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void batteryGuard() {
-        if (prefs.getBoolean("battery_guard_asked", false)) return;
-        prefs.edit().putBoolean("battery_guard_asked", true).apply();
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-        if (pm == null || pm.isIgnoringBatteryOptimizations(getPackageName())) return;
-        new AlertDialog.Builder(this)
-            .setTitle("Mode 24/7")
-            .setMessage("Agar VPN tetap hidup saat layar mati, matikan penghemat daya (battery optimization) dan aktifkan Autostart untuk JhopanStore VPN." )
-            .setPositiveButton("Matikan penghemat daya", (d, w) -> {
-                try {
-                    startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getPackageName())));
-                } catch (Exception error) {
-                    startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
-                }
-            })
-            .setNeutralButton("Aktifkan Autostart", (d, w) -> openAutostartSetting())
-            .setNegativeButton("Nanti", null)
-            .show();
+        boolean batteryDone = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+        boolean autostartDone = prefs.getBoolean("autostart_done", false);
+        if (batteryDone && autostartDone) return;
+        if (prefs.getBoolean("battery_guard_asked", false) && !batteryDone) return;
+        prefs.edit().putBoolean("battery_guard_asked", true).apply();
+        if (!batteryDone) {
+            new AlertDialog.Builder(this)
+                .setTitle("Mode 24/7")
+                .setMessage("Agar VPN tetap hidup saat layar mati, matikan penghemat daya (battery optimization) dan aktifkan Autostart untuk JhopanStore VPN." )
+                .setPositiveButton("Matikan penghemat daya", (d, w) -> {
+                    try {
+                        startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getPackageName())));
+                    } catch (Exception error) {
+                        startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+                    }
+                })
+                .setNeutralButton("Aktifkan Autostart", (d, w) -> openAutostartSetting())
+                .setNegativeButton("Nanti", null)
+                .show();
+            return;
+        }
+        if (!autostartDone) {
+            new AlertDialog.Builder(this)
+                .setTitle("Aktifkan Autostart")
+                .setMessage("Satu langkah lagi untuk mode 24/7: aktifkan Autostart untuk JhopanStore VPN, lalu kunci aplikasi di Recents ( Recent → tahan ikon → gembok ).")
+                .setPositiveButton("Aktifkan Autostart", (d, w) -> { prefs.edit().putBoolean("autostart_done", true).apply(); openAutostartSetting(); })
+                .setNegativeButton("Nanti", null)
+                .show();
+        }
     }
 
     private void openAutostartSetting() {
