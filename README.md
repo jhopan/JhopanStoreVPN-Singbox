@@ -2,19 +2,25 @@
 
 Android Java VPN client by JhopanStore. Scope: VLESS + WebSocket + TLS normal SNI, ARM64 only.
 
+![icon](design/preview-v2.png)
+
 ## Features
 
 - 1.2-second JhopanStore launch splash
+- Custom launcher icon (key, cyan→blue gradient) matching the splash
 - Android `VpnService` with persistent foreground notification
 - VLESS WebSocket/TLS import/export through clipboard and `.jvs` files; supplied path, SNI, and Host preserved
-- Three-dot menu for import/export, HWID copy, and traffic meter on/off
+- Three-dot menu for import/export, HWID copy, and Traffic Meter on/off
 - `allowInsecure=true` by default for compatible Worker bug-domain profiles
 - IPv4-first outbound (`prefer_ipv4`); DNS 1.1.1.1 primary, 8.8.8.8 backup, `local` bootstrap
 - Stable routing via `override_android_vpn` (Android `protect(fd)`; no interface guessing, works on Qualcomm and MediaTek)
 - Honest status flow: Connecting → Checking internet → Connected; failures show a safe reason (no network, DNS, TLS, WebSocket, internet check)
 - 24/7 recovery: `START_STICKY`, saved URI auto-reconnect, screen-on auto-heal probe, network-change probe, reconnect cap
-- Battery guard dialog: disable battery optimization + open MIUI Autostart
-- Traffic meter: pause in background, toggleable in menu
+- Keep-alive on task removal (`onTaskRemoved` restarts the service if the user swipes the app away)
+- Battery guard dialog: disable battery optimization + open MIUI Autostart; stepwise first-run 24/7 setup
+- System-kill education dialog with direct settings links, shown once when the OS kills the VPN
+- Session traffic meter: counts from zero on every connect, resets on disconnect; service-side sampling survives app close; toggle in menu (allowed only while disconnected; off = sampling skipped entirely)
+- Version label (`v1.0.0`) shown in the UI
 
 Excluded: QUIC, hotspot sharing, backup servers, rules, failover, wake lock.
 
@@ -32,6 +38,8 @@ APK outputs:
 
 - `app/build/outputs/apk/debug/app-debug.apk`
 - `app/build/outputs/apk/release/app-release.apk`
+
+CI: GitHub Actions builds the release APK on every push to `main` and publishes it to the `latest` GitHub Release (`JhopanStoreVPN.apk`).
 
 `build_libbox.sh` pins stable compatible sing-box `v1.11.0` and creates ARM64 `app/libs/libbox.aar`. It retains `with_gvisor` for Android TUN and `with_clash_api`, required internally for v1.11 libbox service startup. QUIC and uTLS are removed. It strips symbols and validates the AAR contains only `arm64-v8a`. Current Java `VpnService` targets this tested libbox API. Upgrade Sing-box only alongside a separate tested libbox API migration.
 
