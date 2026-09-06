@@ -269,6 +269,7 @@ public final class VpnService extends android.net.VpnService {
 
     private void writeMeter() {
         if (!running || meterBaseRx < 0) return;
+        if (!getSharedPreferences("vpn", MODE_PRIVATE).getBoolean("show_traffic", true)) return; // meter off: skip sampling
         long rx = android.net.TrafficStats.getUidRxBytes(android.os.Process.myUid());
         long tx = android.net.TrafficStats.getUidTxBytes(android.os.Process.myUid());
         if (rx < 0 || tx < 0) return;

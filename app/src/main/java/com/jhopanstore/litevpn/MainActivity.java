@@ -196,10 +196,11 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void toggleTraffic() {
+        if (connected) { show("Putuskan VPN dulu untuk mengubah meter"); return; }
         showTraffic = !showTraffic;
         prefs.edit().putBoolean("show_traffic", showTraffic).apply();
         traffic.setVisibility(showTraffic ? android.view.View.VISIBLE : android.view.View.GONE);
-        if (showTraffic) { hasBaseline = false; updateTraffic(); }
+        if (showTraffic) { hasBaseline = false; totalRx = 0; totalTx = 0; traffic.setText("↓ 0 B   ↑ 0 B"); }
         invalidateOptionsMenu();
         show(showTraffic ? "Traffic meter on" : "Traffic meter off");
     }
