@@ -35,20 +35,25 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon
-
       - name: Build release APK
         run: ./gradlew assembleRelease --no-daemon
 
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Rename APK
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk JhopanStoreVPN.apk
 
-      - name: Upload release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release
-          path: app/build/outputs/apk/release/app-release.apk
+      - name: Delete old latest release
+        run: |
+          gh release delete latest --yes 2>/dev/null || true
+          git push origin :refs/tags/latest 2>/dev/null || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Create latest release
+        run: |
+          gh release create latest JhopanStoreVPN.apk \
+            --title "JhopanStore VPN (latest)" \
+            --notes "Build otomatis dari commit ${{ github.sha }}. Ini APK release (debug-signed)." \
+            --latest
+        env:
+          GH_TOKEN: ${{ github.token }}
