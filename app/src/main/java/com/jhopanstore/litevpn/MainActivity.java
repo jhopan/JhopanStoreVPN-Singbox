@@ -126,13 +126,24 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void killedBySystemHint() {
-        if (prefs.getBoolean("kill_hint_shown", false)) return;
-        prefs.edit().putBoolean("kill_hint_shown", true).apply();
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        boolean batteryDone = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+        boolean autostartDone = prefs.getBoolean("autostart_done", false);
+        if (batteryDone && autostartDone) return;
+        if (!batteryDone) {
+            new AlertDialog.Builder(this)
+                .setTitle("VPN dimatikan sistem")
+                .setMessage("Android/penghemat daya mematikan VPN saat tidak dipakai. Agar tetap hidup 24/7:\n\n1. Matikan penghemat daya untuk JhopanStore VPN\n2. Aktifkan Autostart\n3. Kunci aplikasi di Recents ( Recent → tahan ikon → gembok )")
+                .setPositiveButton("Matikan penghemat daya", (d, w) -> openBatterySetting())
+                .setNeutralButton("Aktifkan Autostart", (d, w) -> { prefs.edit().putBoolean("autostart_done", true).apply(); openAutostartSetting(); })
+                .setNegativeButton("Tutup", null)
+                .show();
+            return;
+        }
         new AlertDialog.Builder(this)
-            .setTitle("VPN dimatikan sistem")
-            .setMessage("Android/penghemat daya mematikan VPN saat tidak dipakai. Agar tetap hidup 24/7:\n\n1. Matikan penghemat daya untuk JhopanStore VPN\n2. Aktifkan Autostart\n3. Kunci aplikasi di Recents ( Recent → tahan ikon → gembok )")
-            .setPositiveButton("Matikan penghemat daya", (d, w) -> openBatterySetting())
-            .setNeutralButton("Aktifkan Autostart", (d, w) -> openAutostartSetting())
+            .setTitle("Satu langkah lagi")
+            .setMessage("Penghemat daya sudah nonaktif. Sekarang aktifkan Autostart agar VPN bisa hidup sendiri setelah device restart.\n\nLalu kunci aplikasi di Recents ( Recent → tahan ikon → gembok ).")
+            .setPositiveButton("Aktifkan Autostart", (d, w) -> { prefs.edit().putBoolean("autostart_done", true).apply(); openAutostartSetting(); })
             .setNegativeButton("Tutup", null)
             .show();
     }
