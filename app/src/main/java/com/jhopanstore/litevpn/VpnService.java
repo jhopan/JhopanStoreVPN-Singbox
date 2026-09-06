@@ -158,6 +158,7 @@ public final class VpnService extends android.net.VpnService {
             if (failure != null) { fail(failure); return; }
             updateNotification("Connected");
             setState("Connected");
+            resetMeter();
             synchronized (lifecycleLock) { healthyStable = false; }
             scheduleProbe();
         } catch (Exception error) {
@@ -256,6 +257,25 @@ public final class VpnService extends android.net.VpnService {
         if (running) statusPrefs().edit().putLong(KEY_LAST_SEEN, System.currentTimeMillis()).apply();
     }
 
+    private long meterBaseRx = -1, meterBaseTx = -1;
+
+    private void resetMeter() {
+        long rx = android.net.TrafficStats.getUidRxBytes(android.os.Process.myUid());
+        long tx = android.net.TrafficStats.getUidTxBytes(android.os.Process.myUid());
+        meterBaseRx = rx < 0 ? 0 : rx;
+        meterBaseTx = tx < 0 ? 0 : tx;
+        statusPrefs().edit().putLong("session_rx", 0).putLong("session_tx", 0).apply();
+    }
+
+    private void writeMeter() {
+        if (!running || meterBaseRx < 0) return;
+        long rx = android.net.TrafficStats.getUidRxBytes(android.os.Process.myUid());
+        long tx = android.net.TrafficStats.getUidTxBytes(android.os.Process.myUid());
+        if (rx < 0 || tx < 0) return;
+        long usedRx = Math.max(0, rx - meterBaseRx), usedTx = Math.max(0, tx - meterBaseTx);
+        statusPrefs().edit().putLong("session_rx", usedRx).putLong("session_tx", usedTx).apply();
+    }
+
     private void scheduleProbe() {
         if (heartbeat.isShutdown()) return;
         long delay = healthyStable ? STABLE_PROBE_MS : RECOVER_PROBE_MS;
@@ -279,6 +299,7 @@ public final class VpnService extends android.net.VpnService {
                 lastProbeWrite = now;
                 statusPrefs().edit().putLong(KEY_LAST_PROBE, now).apply();
             }
+            writeMeter();
             scheduleProbe();
             return;
         }
@@ -368,6 +389,7 @@ public final class VpnService extends android.net.VpnService {
     }
     private void disconnect() {
         synchronized (lifecycleLock) { connecting = false; running = false; terminalFailure = false; }
+        writeMeter();
         closeCore();
         statusPrefs().edit().remove(KEY_URI).putString(KEY_STATE, "Disconnected").putLong(KEY_LAST_SEEN, 0).putLong(KEY_LAST_PROBE, 0).apply();
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(NOTIFICATION_ID);
