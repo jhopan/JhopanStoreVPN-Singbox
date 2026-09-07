@@ -191,6 +191,7 @@ public final class MainActivity extends AppCompatActivity {
         if (id == R.id.action_export_clipboard) { copy(exportLink()); return true; }
         if (id == R.id.action_export_file) { createExportFile(); return true; }
         if (id == R.id.action_hwid) { copy(hwid); return true; }
+        if (id == R.id.action_about) { showAbout(); return true; }
         if (id == R.id.action_traffic) { toggleTraffic(); return true; }
         return super.onOptionsItemSelected(item);
     }
@@ -203,6 +204,26 @@ public final class MainActivity extends AppCompatActivity {
         if (showTraffic) { hasBaseline = false; totalRx = 0; totalTx = 0; traffic.setText("↓ 0 B   ↑ 0 B"); }
         invalidateOptionsMenu();
         show(showTraffic ? "Traffic meter on" : "Traffic meter off");
+    }
+
+    private void showAbout() {
+        android.view.View view = getLayoutInflater().inflate(R.layout.dialog_about, null);
+        TextView version = view.findViewById(R.id.about_version);
+        try { version.setText("v" + getPackageManager().getPackageInfo(getPackageName(), 0).versionName); }
+        catch (Exception ignored) {}
+        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(this)
+            .setView(view)
+            .create();
+        dialog.getWindow().setBackgroundDrawableResource(android.graphics.Color.parseColor("#1A1A1A"));
+        view.findViewById(R.id.about_telegram).setOnClickListener(v -> {
+            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/jhopan_05"))); }
+            catch (Exception error) { show("No browser"); }
+        });
+        view.findViewById(R.id.about_website).setOnClickListener(v -> {
+            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://jhopanstore.my.id"))); }
+            catch (Exception error) { show("No browser"); }
+        });
+        dialog.show();
     }
 
     private void openImportFile() {
