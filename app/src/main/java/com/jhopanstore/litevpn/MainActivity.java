@@ -207,23 +207,29 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void showAbout() {
-        android.view.View view = getLayoutInflater().inflate(R.layout.dialog_about, null);
-        TextView version = view.findViewById(R.id.about_version);
-        try { version.setText("v" + getPackageManager().getPackageInfo(getPackageName(), 0).versionName); }
-        catch (Exception ignored) {}
-        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(this)
-            .setView(view)
-            .create();
-        dialog.getWindow().setBackgroundDrawableResource(android.graphics.Color.parseColor("#1A1A1A"));
-        view.findViewById(R.id.about_telegram).setOnClickListener(v -> {
-            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/jhopan_05"))); }
-            catch (Exception error) { show("No browser"); }
-        });
-        view.findViewById(R.id.about_website).setOnClickListener(v -> {
-            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://jhopanstore.my.id"))); }
-            catch (Exception error) { show("No browser"); }
-        });
-        dialog.show();
+        try {
+            android.view.View view = getLayoutInflater().inflate(R.layout.dialog_about, null);
+            TextView version = view.findViewById(R.id.about_version);
+            try { version.setText("v" + getPackageManager().getPackageInfo(getPackageName(), 0).versionName); }
+            catch (Exception ignored) {}
+            androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setView(view)
+                .create();
+            dialog.setOnShowListener(d -> {
+                try { dialog.getWindow().setBackgroundDrawableResource(android.graphics.Color.parseColor("#1A1A1A")); } catch (Exception ignored) {}
+            });
+            view.findViewById(R.id.about_telegram).setOnClickListener(v -> {
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/jhopan_05"))); }
+                catch (Exception error) { show("No browser"); }
+            });
+            view.findViewById(R.id.about_website).setOnClickListener(v -> {
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://jhopanstore.my.id"))); }
+                catch (Exception error) { show("No browser"); }
+            });
+            dialog.show();
+        } catch (Exception error) {
+            show("About: " + error.getClass().getSimpleName());
+        }
     }
 
     private void openImportFile() {
