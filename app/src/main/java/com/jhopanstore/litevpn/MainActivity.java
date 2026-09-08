@@ -49,7 +49,7 @@ public final class MainActivity extends AppCompatActivity {
     private TextView status, traffic;
     private String hwid;
     private android.view.View configFields;
-    private android.widget.TextView lockBanner;
+    private android.view.View lockBanner;
     private License license;
     private Button connect;
     private boolean connected;
@@ -223,9 +223,12 @@ public final class MainActivity extends AppCompatActivity {
         configFields.setVisibility(locked ? android.view.View.GONE : android.view.View.VISIBLE);
         lockBanner.setVisibility(locked ? android.view.View.VISIBLE : android.view.View.GONE);
         if (locked) {
-            String meta = "Terpasang via lisensi • HWID " + hwid;
-            if (license.expiry > 0) meta += "\nBerlaku s.d. " + SimpleDateFormat.getDateInstance(SimpleDateFormat.MEDIUM).format(new Date(license.expiry));
-            lockBanner.setText("🔒 " + (license.name.isEmpty() ? "JhopanStore VPN" : license.name) + "\n" + meta);
+            TextView name = lockBanner.findViewById(R.id.lock_name);
+            TextView expiry = lockBanner.findViewById(R.id.lock_expiry);
+            name.setText(license.name.isEmpty() ? "JhopanStore VPN" : license.name);
+            expiry.setText(license.expiry > 0
+                ? "Berlaku s.d. " + SimpleDateFormat.getDateInstance(SimpleDateFormat.MEDIUM).format(new Date(license.expiry))
+                : "Aktif selamanya");
         }
     }
 
