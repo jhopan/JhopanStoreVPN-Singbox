@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="HTTP Ping"
+            android:textStyle="bold"
+            android:textSize="13sp"
+            android:textColor="#FFFFFF" />
+        <CheckBox
+            android:id="@+id/set_ping"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Enable keep-alive ping while connected"
+            android:textSize="13sp"
+            android:textColor="#BDBDBD"
+            android:buttonTint="#4CAF50"
+            android:checked="true" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="Ping interval (seconds)"
+            android:textStyle="bold"
+            android:textSize="13sp"
+            android:textColor="#FFFFFF" />
+        <EditText
+            android:id="@+id/set_ping_interval"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_marginTop="6dp"
+            android:hint="3"
+            android:textColorHint="#777777"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#333333"
+            android:padding="10dp"
+            android:inputType="number"
+            android:singleLine="true" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="Ping URL"
+            android:textStyle="bold"
+            android:textSize="13sp"
+            android:textColor="#FFFFFF" />
+        <EditText
+            android:id="@+id/set_ping_url"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_marginTop="6dp"
+            android:hint="http://connectivitycheck.gstatic.com/generate_204"
+            android:textColorHint="#777777"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#333333"
+            android:padding="10dp"
+            android:singleLine="true"
+            android:inputType="textUri" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="Traffic meter"
+            android:textStyle="bold"
+            android:textSize="13sp"
+            android:textColor="#FFFFFF" />
+        <CheckBox
+            android:id="@+id/set_traffic"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Show traffic meter"
+            android:textSize="13sp"
+            android:textColor="#BDBDBD"
+            android:buttonTint="#4CAF50"
+            android:checked="true" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="Device HWID"
+            android:textStyle="bold"
+            android:textSize="13sp"
+            android:textColor="#FFFFFF" />
+        <TextView
+            android:id="@+id/set_hwid"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:fontFamily="monospace"
+            android:textIsSelectable="true"
+            android:textSize="13sp"
+            android:textColor="#00E5FF"
+            android:background="#222222"
+            android:padding="10dp" />
+
+        <Button
+            android:id="@+id/set_copy_hwid"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="8dp"
+            android:text="Copy HWID"
+            android:textAllCaps="true"
+            android:textStyle="bold"
+            android:backgroundTint="#333333"
+            android:textColor="#FFFFFF" />
+
+        <Button
+            android:id="@+id/set_done"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="18dp"
+            android:text="SIMPAN"
+            android:textAllCaps="true"
+            android:textStyle="bold"
+            android:backgroundTint="#4CAF50"
+            android:textColor="#FFFFFF" />
+    </LinearLayout>
+</ScrollView>

@@ -193,7 +193,6 @@ public final class MainActivity extends AppCompatActivity {
 
     @Override public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.main_menu, menu);
-        menu.findItem(R.id.action_traffic).setChecked(showTraffic);
         return true;
     }
 
@@ -204,11 +203,54 @@ public final class MainActivity extends AppCompatActivity {
         if (id == R.id.action_export_clipboard) { copy(exportLink()); return true; }
         if (id == R.id.action_export_file) { createExportFile(); return true; }
         if (id == R.id.action_export_license) { showExportLicenseDialog(); return true; }
-        if (id == R.id.action_hwid) { copy(hwid); return true; }
+        if (id == R.id.action_settings) { showSettings(); return true; }
         if (id == R.id.action_clear) { confirmClearConfig(); return true; }
         if (id == R.id.action_about) { showAbout(); return true; }
-        if (id == R.id.action_traffic) { toggleTraffic(); return true; }
         return super.onOptionsItemSelected(item);
+    }
+
+    private void showSettings() {
+        android.view.View form = getLayoutInflater().inflate(R.layout.dialog_settings, null);
+        android.widget.CheckBox ping = form.findViewById(R.id.set_ping);
+        android.widget.EditText interval = form.findViewById(R.id.set_ping_interval);
+        android.widget.EditText url = form.findViewById(R.id.set_ping_url);
+        android.widget.CheckBox traffic = form.findViewById(R.id.set_traffic);
+        TextView hwidView = form.findViewById(R.id.set_hwid);
+        hwidView.setText(hwid);
+        ping.setChecked(prefs.getBoolean("http_ping", true));
+        interval.setText(String.valueOf(prefs.getInt("http_ping_interval", 3)));
+        url.setText(prefs.getString("http_ping_url", "http://connectivitycheck.gstatic.com/generate_204"));
+        traffic.setChecked(prefs.getBoolean("show_traffic", true));
+        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Pengaturan")
+            .setView(form)
+            .create();
+        dialog.setOnShowListener(d -> {
+            try { dialog.getWindow().setBackgroundDrawableResource(android.graphics.Color.parseColor("#1A1A1A")); } catch (Exception ignored) {}
+        });
+        form.findViewById(R.id.set_copy_hwid).setOnClickListener(v -> copy(hwid));
+        form.findViewById(R.id.set_done).setOnClickListener(v -> {
+            int seconds;
+            try { seconds = Integer.parseInt(interval.getText().toString().trim()); } catch (Exception ignored) { seconds = 3; }
+            if (seconds < 1) seconds = 1;
+            String pingUrl = url.getText().toString().trim();
+            if (pingUrl.isEmpty()) pingUrl = "http://connectivitycheck.gstatic.com/generate_204";
+            boolean show = traffic.isChecked();
+            prefs.edit()
+                .putBoolean("http_ping", ping.isChecked())
+                .putInt("http_ping_interval", seconds)
+                .putString("http_ping_url", pingUrl)
+                .putBoolean("show_traffic", show)
+                .apply();
+            traffic.setVisibility(show ? android.view.View.VISIBLE : android.view.View.GONE);
+            if (!show) traffic.setText("");
+            hasBaseline = false;
+            VpnService.applyHttpPing(prefs);
+            invalidateOptionsMenu();
+            dialog.dismiss();
+            show("Pengaturan disimpan");
+        });
+        dialog.show();
     }
 
     private void confirmClearConfig() {
@@ -253,16 +295,6 @@ public final class MainActivity extends AppCompatActivity {
         } catch (Exception error) {
             show("About: " + error.getClass().getSimpleName());
         }
-    }
-
-    private void toggleTraffic() {
-        if (connected) { show("Putuskan VPN dulu untuk mengubah meter"); return; }
-        showTraffic = !showTraffic;
-        prefs.edit().putBoolean("show_traffic", showTraffic).apply();
-        traffic.setVisibility(showTraffic ? android.view.View.VISIBLE : android.view.View.GONE);
-        if (showTraffic) { hasBaseline = false; totalRx = 0; totalTx = 0; traffic.setText("↓ 0 B   ↑ 0 B"); }
-        invalidateOptionsMenu();
-        show(showTraffic ? "Traffic meter on" : "Traffic meter off");
     }
 
     private void openImportFile() {
@@ -410,6 +442,7 @@ public final class MainActivity extends AppCompatActivity {
     private void connect(String uri) { save(); VpnService.start(this, uri); }
     private void disconnect() { VpnService.stop(this); }
     private void onVpnState(String value) {
+        if (value == null) { refreshPingSchedule(); return; } // settings changed nudge
         status.setText(value);
         connected = "Connected".equals(value) || "Connecting…".equals(value) || "Checking internet…".equals(value) || "Reconnecting…".equals(value);
         connect.setText(connected ? "DISCONNECT" : "CONNECT");
@@ -418,6 +451,9 @@ public final class MainActivity extends AppCompatActivity {
         if ("Disconnected".equals(value)) { totalRx = 0; totalTx = 0; hasBaseline = false; if (showTraffic) traffic.setText("↓ 0 B   ↑ 0 B"); }
         else if (!connected) resetTraffic();
     }
+
+    /** Re-apply HTTP ping schedule inside service (called on null-state nudge). */
+    private void refreshPingSchedule() { VpnService.applyHttpPing(prefs); }
 
     private final Runnable trafficTask = new Runnable() {
         @Override public void run() {

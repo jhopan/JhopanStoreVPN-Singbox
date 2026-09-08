@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import io.github.sagernet.libbox.libbox.BoxService;
 import io.github.sagernet.libbox.libbox.InterfaceUpdateListener;
@@ -79,9 +80,23 @@ public final class VpnService extends android.net.VpnService {
     private int failedProbes;
     private boolean healthyStable;
     private long lastProbeWrite;
+    private ScheduledFuture<?> pingFuture;
+    private int pingFailures;
+    private static volatile boolean httpPingEnabled = true;
+    private static volatile int httpPingInterval = 3;
+    private static volatile String httpPingUrl = "http://connectivitycheck.gstatic.com/generate_204";
     private final BroadcastReceiver screenReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) { scheduleHealthCheck(); }
     };
+
+    /** Apply HTTP ping settings from prefs (called by MainActivity after saving Pengaturan). */
+    public static void applyHttpPing(SharedPreferences prefs) {
+        httpPingEnabled = prefs.getBoolean("http_ping", true);
+        httpPingInterval = prefs.getInt("http_ping_interval", 3);
+        String url = prefs.getString("http_ping_url", null);
+        httpPingUrl = url == null || url.isEmpty() ? "http://connectivitycheck.gstatic.com/generate_204" : url;
+        if (listener != null) listener.onState(null); // nudge: service re-reads prefs and reschedules
+    }
 
     public static void setListener(Listener value) { listener = value; }
     public static void start(Context context, String uri) {
@@ -159,8 +174,9 @@ public final class VpnService extends android.net.VpnService {
             updateNotification("Connected");
             setState("Connected");
             resetMeter();
-            synchronized (lifecycleLock) { healthyStable = false; }
+            synchronized (lifecycleLock) { healthyStable = false; pingFailures = 0; }
             scheduleProbe();
+            scheduleHttpPing();
         } catch (Exception error) {
             Log.e("VpnService", "connect", error);
             fail(connectionFailure(error));
@@ -290,11 +306,46 @@ public final class VpnService extends android.net.VpnService {
         catch (Exception ignored) {}
     }
 
+    private void scheduleHttpPing() {
+        if (pingFuture != null) { pingFuture.cancel(false); pingFuture = null; }
+        if (!httpPingEnabled) return;
+        int seconds = Math.max(1, httpPingInterval);
+        try { pingFuture = heartbeat.scheduleWithFixedDelay(this::runHttpPing, seconds, seconds, TimeUnit.SECONDS); }
+        catch (Exception ignored) {}
+    }
+
+    private void runHttpPing() {
+        synchronized (lifecycleLock) { if (!running || connecting) return; }
+        String failure = pingUrl(httpPingUrl);
+        if (failure == null) { pingFailures = 0; return; }
+        pingFailures++;
+        if (pingFailures == 3) state("HTTP ping gagal — tunnel mungkin bermasalah");
+    }
+
+    private String pingUrl(String target) {
+        HttpURLConnection connection = null;
+        try {
+            Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress("127.0.0.1", SingboxConfig.PROXY_PORT));
+            connection = (HttpURLConnection) new URL(target).openConnection(proxy);
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
+            connection.setInstanceFollowRedirects(false);
+            int code = connection.getResponseCode();
+            if (code >= 200 && code < 400) return null;
+            return "HTTP " + code;
+        } catch (Exception error) {
+            return String.valueOf(error.getMessage());
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
     private void checkTunnel() {
         synchronized (lifecycleLock) { if (!running || connecting) return; }
         String failure = verifyTunnel();
         if (failure == null) {
-            synchronized (lifecycleLock) { failedProbes = 0; healthyStable = true; }
+            synchronized (lifecycleLock) { failedProbes = 0; healthyStable = true; autoReconnects = 0; }
             long now = System.currentTimeMillis();
             if (now - lastProbeWrite > PROBE_WRITE_THROTTLE_MS) {
                 lastProbeWrite = now;
@@ -390,6 +441,7 @@ public final class VpnService extends android.net.VpnService {
     }
     private void disconnect() {
         synchronized (lifecycleLock) { connecting = false; running = false; terminalFailure = false; }
+        if (pingFuture != null) { pingFuture.cancel(false); pingFuture = null; }
         writeMeter();
         closeCore();
         statusPrefs().edit().remove(KEY_URI).putString(KEY_STATE, "Disconnected").putLong(KEY_LAST_SEEN, 0).putLong(KEY_LAST_PROBE, 0).apply();
