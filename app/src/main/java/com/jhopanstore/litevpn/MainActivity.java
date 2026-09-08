@@ -345,10 +345,13 @@ public final class MainActivity extends AppCompatActivity {
     private void importText(String text) {
         String value = text == null ? "" : text.trim();
         if (LicenseCodec.isEncoded(value)) { importLicense(value); return; }
+        boolean hadLicense = license != null;
         try {
             VlessConfig config = VlessParser.parse(value);
             address.setText(config.address + ":" + config.port); uuid.setText(config.uuid); path.setText(config.path); sni.setText(config.sni); host.setText(config.host);
-            save(); show("VLESS imported");
+            if (hadLicense) { prefs.edit().remove("license_payload").apply(); license = null; show("Lisensi dilepas — pakai config sendiri"); }
+            else show("VLESS imported");
+            applyLockState();
         } catch (Exception error) { show(error.getMessage()); }
     }
 
