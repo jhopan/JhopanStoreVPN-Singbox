@@ -179,7 +179,7 @@ public final class VpnService extends android.net.VpnService {
     private final class Platform implements PlatformInterface {
         @Override public int openTun(TunOptions options) {
             Builder builder = new Builder().setSession("JhopanStore VPN").setMtu(options.getMTU());
-            builder.addAddress("172.19.0.1", 30).addRoute("0.0.0.0", 0).addDnsServer("8.8.8.8").addDnsServer("8.8.4.4");
+            builder.addAddress("172.19.0.1", 30).addRoute("0.0.0.0", 0).addDnsServer("1.1.1.1").addDnsServer("8.8.8.8");
             try { builder.addDisallowedApplication(getPackageName()); } catch (Exception ignored) {}
             try {
                 tun = builder.establish();

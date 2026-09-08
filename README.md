@@ -25,7 +25,7 @@ JhopanStore VPN is a Java-only Android VPN client built on `VpnService` and a lo
 ### Connection
 
 - VLESS + WebSocket + TLS with normal SNI; path, SNI, and Host preserved exactly as supplied
-- IPv4-first outbound (`prefer_ipv4`); Cloudflare DNS primary (1.1.1.1), Google backup (8.8.8.8)
+- IPv4-first outbound (`prefer_ipv4`); Cloudflare DNS primary (1.1.1.1), Google backup (8.8.8.8) — consistent across both the sing-box config and the Android TUN
 - Stable routing via `override_android_vpn` — Android `protect(fd)`, no interface guessing, works on both Qualcomm and MediaTek
 - Honest status flow: Connecting → Checking internet → Connected, only after a real HTTP 204 through the tunnel; failures show a safe reason (no network, DNS, TLS, WebSocket)
 
