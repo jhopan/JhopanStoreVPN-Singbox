@@ -95,7 +95,7 @@ public final class VpnService extends android.net.VpnService {
         httpPingInterval = prefs.getInt("http_ping_interval", 3);
         String url = prefs.getString("http_ping_url", null);
         httpPingUrl = url == null || url.isEmpty() ? "http://connectivitycheck.gstatic.com/generate_204" : url;
-        listenerStateRefresh = true; // service re-reads flags + reschedules on next loop tick
+        listenerStateRefresh = true; // service reschedules on next ping tick (loop lama dicancel + dibuat baru)
     }
     private static volatile boolean listenerStateRefresh;
 
@@ -320,9 +320,26 @@ public final class VpnService extends android.net.VpnService {
         synchronized (lifecycleLock) { if (!running || connecting) return; }
         if (listenerStateRefresh) { scheduleHttpPing(); return; } // settings changed: reschedule with new values
         String failure = pingUrl(httpPingUrl);
-        if (failure == null) { pingFailures = 0; return; }
+        long now = System.currentTimeMillis();
+        if (failure == null) {
+            pingFailures = 0;
+            pushPingLine("HTTP ping ok " + android.text.format.DateFormat.format("HH:mm:ss", now));
+            return;
+        }
         pingFailures++;
-        if (pingFailures == 3) state("HTTP ping gagal — tunnel mungkin bermasalah");
+        pushPingLine("HTTP ping gagal (" + pingFailures + ") " + android.text.format.DateFormat.format("HH:mm:ss", now));
+        if (pingFailures >= 3) { pushPingLine("Percobaan koneksi ulang otomatis…"); reconnectTunnel(); }
+    }
+
+    /** HTTP ping status lines, shown in the app status box under "Connected". Max 5, then cleared. */
+    private static final java.util.Deque<String> pingLines = new java.util.ArrayDeque<>();
+    private static void pushPingLine(String line) {
+        synchronized (pingLines) {
+            pingLines.addLast(line);
+            while (pingLines.size() > 5) pingLines.pollFirst();
+            if (pingLines.size() >= 5) pingLines.clear(); // full batch → clear and start over
+        }
+        state("Connected\n" + String.join("\n", pingLines));
     }
 
     private String pingUrl(String target) {
