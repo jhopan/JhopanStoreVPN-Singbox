@@ -1,0 +1,64 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Versioned release (tag push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          ./gradlew assembleRelease --no-daemon
+          VER="${GITHUB_REF#refs/tags/}"
+          cp app/build/outputs/apk/release/app-release.apk "JhopanStoreVPN-${VER}.apk"
+          gh release create "$VER" "JhopanStoreVPN-${VER}.apk" \
+            --title "JhopanStore VPN ${VER}" \
+            --notes "Release ${VER}. APK release (debug-signed)." \
+            --latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Rolling latest (branch push)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk JhopanStoreVPN.apk
+          gh release delete latest --yes 2>/dev/null || true
+          git push origin :refs/tags/latest 2>/dev/null || true
+          gh release create latest JhopanStoreVPN.apk \
+            --title "JhopanStore VPN (latest)" \
+            --notes "Build otomatis dari commit ${{ github.sha }}. Ini APK release (debug-signed)." \
+            --latest
+        env:
+          GH_TOKEN: ${{ github.token }}

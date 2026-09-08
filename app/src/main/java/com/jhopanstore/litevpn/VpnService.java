@@ -27,9 +27,7 @@ import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.SocketTimeoutException;
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -41,7 +39,6 @@ import io.github.sagernet.libbox.libbox.Libbox;
 import io.github.sagernet.libbox.libbox.NetworkInterfaceIterator;
 import io.github.sagernet.libbox.libbox.PlatformInterface;
 import io.github.sagernet.libbox.libbox.SetupOptions;
-import io.github.sagernet.libbox.libbox.StringIterator;
 import io.github.sagernet.libbox.libbox.TunOptions;
 import io.github.sagernet.libbox.libbox.WIFIState;
 
@@ -68,8 +65,8 @@ public final class VpnService extends android.net.VpnService {
     private static final int PROBE_ATTEMPTS = 2;
     private static final long PROBE_GAP_MS = 2_000;
 
-    private final ExecutorService worker = Executors.newSingleThreadExecutor();
-    private final ScheduledExecutorService heartbeat = Executors.newSingleThreadScheduledExecutor();
+    private ExecutorService worker = Executors.newSingleThreadExecutor();
+    private ScheduledExecutorService heartbeat = Executors.newSingleThreadScheduledExecutor();
     private final Object lifecycleLock = new Object();
     private BoxService service;
     private ParcelFileDescriptor tun;
@@ -113,6 +110,11 @@ public final class VpnService extends android.net.VpnService {
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) { disconnect(); return START_NOT_STICKY; }
+        if (heartbeat.isShutdown()) { // reused instance after stopSelf(): rebuild executors
+            heartbeat = Executors.newSingleThreadScheduledExecutor();
+            worker = Executors.newSingleThreadExecutor();
+            heartbeat.scheduleAtFixedRate(this::writeHeartbeat, 0, HEARTBEAT_MS, TimeUnit.MILLISECONDS);
+        }
         ConnectivityManager manager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
         NetworkCapabilities caps = manager.getNetworkCapabilities(manager.getActiveNetwork());
         if (caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) { fail("No network: turn on Wi-Fi or mobile data"); return START_NOT_STICKY; }
@@ -125,7 +127,10 @@ public final class VpnService extends android.net.VpnService {
         statusPrefs().edit().putString(KEY_URI, uri).apply();
         startForeground(NOTIFICATION_ID, notification("Connecting…"));
         setState("Connecting…");
-        worker.execute(() -> connect(uri));
+        worker.execute(() -> {
+            try { connect(uri); }
+            catch (Exception error) { Log.e("VpnService", "connect task", error); fail(connectionFailure(error)); }
+        });
         return START_STICKY;
     }
 
@@ -139,13 +144,21 @@ public final class VpnService extends android.net.VpnService {
             closeCore();
             service = Libbox.newService(json, new Platform());
             service.start();
-            synchronized (lifecycleLock) { connecting = false; running = true; terminalFailure = false; failedProbes = 0; autoReconnects = 0; }
+            synchronized (lifecycleLock) {
+                if (!connecting) { // user pressed DISCONNECT while we were building: honor it
+                    closeCore();
+                    return;
+                }
+                connecting = false; running = true; terminalFailure = false; failedProbes = 0; autoReconnects = 0;
+            }
             updateNotification("Checking internet…");
             setState("Checking internet…");
             String failure = awaitHealthyTunnel();
+            synchronized (lifecycleLock) { if (!running) { closeCore(); return; } } // disconnected while checking
             if (failure != null) { fail(failure); return; }
             updateNotification("Connected");
             setState("Connected");
+            resetMeter();
             synchronized (lifecycleLock) { healthyStable = false; }
             scheduleProbe();
         } catch (Exception error) {
@@ -168,14 +181,19 @@ public final class VpnService extends android.net.VpnService {
             Builder builder = new Builder().setSession("JhopanStore VPN").setMtu(options.getMTU());
             builder.addAddress("172.19.0.1", 30).addRoute("0.0.0.0", 0).addDnsServer("8.8.8.8").addDnsServer("8.8.4.4");
             try { builder.addDisallowedApplication(getPackageName()); } catch (Exception ignored) {}
-            tun = builder.establish();
+            try {
+                tun = builder.establish();
+                if (tun == null) Log.e("VpnService", "establish() returned null — VPN consent revoked or another VPN active");
+            } catch (Exception error) {
+                Log.e("VpnService", "establish() failed", error);
+            }
             return tun == null ? -1 : tun.getFd();
         }
         @Override public void autoDetectInterfaceControl(int fd) { if (!protect(fd)) Log.w("VpnService", "protect failed: " + fd); }
         @Override public void clearDNSCache() {}
         @Override public void closeDefaultInterfaceMonitor(InterfaceUpdateListener value) { stopNetworkMonitor(); }
         @Override public int findConnectionOwner(int protocol, String source, int sourcePort, String destination, int destinationPort) { return 0; }
-        @Override public NetworkInterfaceIterator getInterfaces() { return new InterfaceIterator(readInterfaces()); }
+        @Override public NetworkInterfaceIterator getInterfaces() { return new InterfaceIterator(Collections.emptyList()); }
         @Override public boolean includeAllNetworks() { return false; }
         @Override public String packageNameByUid(int uid) { return ""; }
         @Override public WIFIState readWIFIState() { return null; }
@@ -186,38 +204,6 @@ public final class VpnService extends android.net.VpnService {
         @Override public boolean usePlatformAutoDetectInterfaceControl() { return true; }
         @Override public boolean useProcFS() { return false; }
         @Override public void writeLog(String message) { Log.i("libbox", message); }
-    }
-
-    private List<io.github.sagernet.libbox.libbox.NetworkInterface> readInterfaces() {
-        try {
-            List<io.github.sagernet.libbox.libbox.NetworkInterface> result = new ArrayList<>();
-            Enumeration<java.net.NetworkInterface> source = java.net.NetworkInterface.getNetworkInterfaces();
-            while (source != null && source.hasMoreElements()) {
-                java.net.NetworkInterface item = source.nextElement();
-                io.github.sagernet.libbox.libbox.NetworkInterface output = new io.github.sagernet.libbox.libbox.NetworkInterface();
-                output.setIndex(item.getIndex()); output.setName(item.getName()); output.setMTU(item.getMTU());
-                int flags = item.isUp() ? 0x41 : 0;
-                if (item.isLoopback()) flags |= 0x8;
-                if (item.isPointToPoint()) flags |= 0x10; else if (!item.isLoopback()) flags |= 0x2;
-                if (item.supportsMulticast()) flags |= 0x1000;
-                output.setFlags(flags); output.setType(interfaceType(item.getName())); output.setMetered(false);
-                List<String> addresses = new ArrayList<>();
-                for (java.net.InterfaceAddress address : item.getInterfaceAddresses()) {
-                    String value = address.getAddress().getHostAddress();
-                    if (value != null) addresses.add(value.split("%")[0] + "/" + address.getNetworkPrefixLength());
-                }
-                output.setAddresses(new Strings(addresses)); output.setDNSServer(new Strings(Collections.emptyList()));
-                result.add(output);
-            }
-            return result;
-        } catch (Exception error) { Log.w("VpnService", "get interfaces", error); return Collections.emptyList(); }
-    }
-
-    private static int interfaceType(String name) {
-        if (name.startsWith("wlan") || name.startsWith("wl")) return 0;
-        if (name.startsWith("rmnet") || name.startsWith("ccmni") || name.startsWith("pdp")) return 1;
-        if (name.startsWith("eth")) return 2;
-        return 3;
     }
 
     private synchronized void startNetworkMonitor(InterfaceUpdateListener value) {
@@ -253,13 +239,6 @@ public final class VpnService extends android.net.VpnService {
         } catch (Exception error) { Log.w("VpnService", "report network", error); }
     }
 
-    private static final class Strings implements StringIterator {
-        private final List<String> values; private int position;
-        Strings(List<String> values) { this.values = values; }
-        @Override public boolean hasNext() { return position < values.size(); }
-        @Override public int len() { return values.size(); }
-        @Override public String next() { return values.get(position++); }
-    }
     private static final class InterfaceIterator implements NetworkInterfaceIterator {
         private final List<io.github.sagernet.libbox.libbox.NetworkInterface> values; private int position;
         InterfaceIterator(List<io.github.sagernet.libbox.libbox.NetworkInterface> values) { this.values = values; }
@@ -278,13 +257,37 @@ public final class VpnService extends android.net.VpnService {
         if (running) statusPrefs().edit().putLong(KEY_LAST_SEEN, System.currentTimeMillis()).apply();
     }
 
-    private void scheduleHealthCheck() {
-        heartbeat.schedule(this::checkTunnel, 2, TimeUnit.SECONDS);
+    private long meterBaseRx = -1, meterBaseTx = -1;
+
+    private void resetMeter() {
+        long rx = android.net.TrafficStats.getUidRxBytes(android.os.Process.myUid());
+        long tx = android.net.TrafficStats.getUidTxBytes(android.os.Process.myUid());
+        meterBaseRx = rx < 0 ? 0 : rx;
+        meterBaseTx = tx < 0 ? 0 : tx;
+        statusPrefs().edit().putLong("session_rx", 0).putLong("session_tx", 0).apply();
+    }
+
+    private void writeMeter() {
+        if (!running || meterBaseRx < 0) return;
+        if (!getSharedPreferences("vpn", MODE_PRIVATE).getBoolean("show_traffic", true)) return; // meter off: skip sampling
+        long rx = android.net.TrafficStats.getUidRxBytes(android.os.Process.myUid());
+        long tx = android.net.TrafficStats.getUidTxBytes(android.os.Process.myUid());
+        if (rx < 0 || tx < 0) return;
+        long usedRx = Math.max(0, rx - meterBaseRx), usedTx = Math.max(0, tx - meterBaseTx);
+        statusPrefs().edit().putLong("session_rx", usedRx).putLong("session_tx", usedTx).apply();
     }
 
     private void scheduleProbe() {
+        if (heartbeat.isShutdown()) return;
         long delay = healthyStable ? STABLE_PROBE_MS : RECOVER_PROBE_MS;
-        heartbeat.schedule(this::checkTunnel, delay, TimeUnit.MILLISECONDS);
+        try { heartbeat.schedule(this::checkTunnel, delay, TimeUnit.MILLISECONDS); }
+        catch (Exception ignored) {}
+    }
+
+    private void scheduleHealthCheck() {
+        if (heartbeat.isShutdown()) return;
+        try { heartbeat.schedule(this::checkTunnel, 2, TimeUnit.SECONDS); }
+        catch (Exception ignored) {}
     }
 
     private void checkTunnel() {
@@ -297,20 +300,22 @@ public final class VpnService extends android.net.VpnService {
                 lastProbeWrite = now;
                 statusPrefs().edit().putLong(KEY_LAST_PROBE, now).apply();
             }
+            writeMeter();
             scheduleProbe();
             return;
         }
-        synchronized (lifecycleLock) { healthyStable = false; }
+        synchronized (lifecycleLock) {
+            if (!running || connecting) return; // user disconnected or reconnect in progress: never override status
+            healthyStable = false;
+        }
         boolean reconnect;
         synchronized (lifecycleLock) {
-            reconnect = ++failedProbes >= PROBE_FAIL_LIMIT && running && !connecting && autoReconnects < MAX_AUTO_RECONNECTS;
+            reconnect = ++failedProbes >= PROBE_FAIL_LIMIT && autoReconnects < MAX_AUTO_RECONNECTS;
             if (reconnect) { running = false; connecting = true; failedProbes = 0; autoReconnects++; }
-            else if (failedProbes >= PROBE_FAIL_LIMIT && running && !connecting) { running = false; connecting = true; failedProbes = 0; }
             else { failedProbes = 0; }
         }
         if (reconnect) reconnectTunnel();
-        else if (!running) fail("Cannot connect: check server, port, path, SNI, and Host");
-        else scheduleProbe();
+        else fail("Cannot connect: check server, port, path, SNI, and Host");
     }
 
     private String verifyTunnel() {
@@ -385,6 +390,7 @@ public final class VpnService extends android.net.VpnService {
     }
     private void disconnect() {
         synchronized (lifecycleLock) { connecting = false; running = false; terminalFailure = false; }
+        writeMeter();
         closeCore();
         statusPrefs().edit().remove(KEY_URI).putString(KEY_STATE, "Disconnected").putLong(KEY_LAST_SEEN, 0).putLong(KEY_LAST_PROBE, 0).apply();
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(NOTIFICATION_ID);
@@ -394,6 +400,15 @@ public final class VpnService extends android.net.VpnService {
     }
     @Override public void onDestroy() { boolean failed; synchronized (lifecycleLock) { running = false; connecting = false; failed = terminalFailure; } closeCore(); heartbeat.shutdownNow(); worker.shutdownNow(); try { unregisterReceiver(screenReceiver); } catch (Exception ignored) {} if (!failed) statusPrefs().edit().putString(KEY_STATE, "Disconnected").putLong(KEY_LAST_SEEN, 0).putLong(KEY_LAST_PROBE, 0).apply(); super.onDestroy(); }
     @Override public void onRevoke() { disconnect(); super.onRevoke(); }
+    @Override public void onTaskRemoved(Intent rootIntent) {
+        if (running && !connecting) { // user swiped app away: keep VPN alive
+            Intent restart = new Intent(getApplicationContext(), VpnService.class)
+                .putExtra(EXTRA_URI, statusPrefs().getString(KEY_URI, null));
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(restart);
+            else startService(restart);
+        }
+        super.onTaskRemoved(rootIntent);
+    }
 
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

@@ -68,13 +68,15 @@ public final class MainActivity extends AppCompatActivity {
         address = findViewById(R.id.address); uuid = findViewById(R.id.uuid); path = findViewById(R.id.path); sni = findViewById(R.id.sni); host = findViewById(R.id.host);
         status = findViewById(R.id.status); traffic = findViewById(R.id.traffic); connect = findViewById(R.id.connect);
         configFields = findViewById(R.id.configFields); lockBanner = findViewById(R.id.lockBanner);
+        TextView version = findViewById(R.id.version);
+        try { version.setText("v" + getPackageManager().getPackageInfo(getPackageName(), 0).versionName); }
+        catch (Exception ignored) { version.setVisibility(android.view.View.GONE); }
         load();
         hwid = Installation.id(this);
         loadLicense();
         applyLockState();
         uid = android.os.Process.myUid();
-        totalRx = prefs.getLong("traffic_total_rx", 0);
-        totalTx = prefs.getLong("traffic_total_tx", 0);
+        totalRx = 0; totalTx = 0;
         showTraffic = prefs.getBoolean("show_traffic", true);
         traffic.setVisibility(showTraffic ? android.view.View.VISIBLE : android.view.View.GONE);
         connect.setOnClickListener(v -> { if (connected) disconnect(); else requestConnect(); });
@@ -86,22 +88,50 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void batteryGuard() {
-        if (prefs.getBoolean("battery_guard_asked", false)) return;
-        prefs.edit().putBoolean("battery_guard_asked", true).apply();
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-        if (pm == null || pm.isIgnoringBatteryOptimizations(getPackageName())) return;
-        new AlertDialog.Builder(this)
-            .setTitle("Mode 24/7")
-            .setMessage("Agar VPN tetap hidup saat layar mati, matikan penghemat daya (battery optimization) untuk JhopanStore VPN dan aktifkan Autostart di pengaturan." )
-            .setPositiveButton("Matikan penghemat daya", (d, w) -> {
+        boolean batteryDone = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+        boolean autostartDone = prefs.getBoolean("autostart_done", false);
+        if (batteryDone && autostartDone) return;
+        if (prefs.getBoolean("battery_guard_asked", false) && !batteryDone) return;
+        prefs.edit().putBoolean("battery_guard_asked", true).apply();
+        if (!batteryDone) {
+            new AlertDialog.Builder(this)
+                .setTitle("Mode 24/7")
+                .setMessage("Agar VPN tetap hidup saat layar mati, matikan penghemat daya (battery optimization) dan aktifkan Autostart untuk JhopanStore VPN." )
+                .setPositiveButton("Matikan penghemat daya", (d, w) -> {
+                    try {
+                        startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getPackageName())));
+                    } catch (Exception error) {
+                        startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+                    }
+                })
+                .setNeutralButton("Aktifkan Autostart", (d, w) -> openAutostartSetting())
+                .setNegativeButton("Nanti", null)
+                .show();
+            return;
+        }
+        if (!autostartDone) {
+            new AlertDialog.Builder(this)
+                .setTitle("Aktifkan Autostart")
+                .setMessage("Satu langkah lagi untuk mode 24/7: aktifkan Autostart untuk JhopanStore VPN, lalu kunci aplikasi di Recents ( Recent → tahan ikon → gembok ).")
+                .setPositiveButton("Aktifkan Autostart", (d, w) -> { prefs.edit().putBoolean("autostart_done", true).apply(); openAutostartSetting(); })
+                .setNegativeButton("Nanti", null)
+                .show();
+        }
+    }
+
+    private void openAutostartSetting() {
+        try {
+            startActivity(new Intent("miui.intent.action.OP_AUTO_START").addCategory(Intent.CATEGORY_DEFAULT));
+        } catch (Exception error) {
+            try {
+                startActivity(new Intent().setComponent(new android.content.ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")));
+            } catch (Exception error2) {
                 try {
-                    startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getPackageName())));
-                } catch (Exception error) {
-                    startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
-                }
-            })
-            .setNegativeButton("Nanti", null)
-            .show();
+                    startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
+                } catch (Exception ignored) {}
+            }
+        }
     }
 
     @Override protected void onNewIntent(Intent intent) {
@@ -115,9 +145,44 @@ public final class MainActivity extends AppCompatActivity {
         SharedPreferences vpnStatus = getSharedPreferences("vpn_status", MODE_PRIVATE);
         String value = vpnStatus.getString("state", "Disconnected");
         long lastSeen = vpnStatus.getLong("last_seen", 0);
-        if ("Connected".equals(value) && System.currentTimeMillis() - lastSeen > 35_000) value = "Disconnected";
+        if ("Connected".equals(value) && System.currentTimeMillis() - lastSeen > 35_000) {
+            value = "Disconnected";
+            killedBySystemHint();
+        }
         onVpnState(value);
         handler.post(trafficTask);
+    }
+
+    private void killedBySystemHint() {
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        boolean batteryDone = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+        boolean autostartDone = prefs.getBoolean("autostart_done", false);
+        if (batteryDone && autostartDone) return;
+        if (!batteryDone) {
+            new AlertDialog.Builder(this)
+                .setTitle("VPN dimatikan sistem")
+                .setMessage("Android/penghemat daya mematikan VPN saat tidak dipakai. Agar tetap hidup 24/7:\n\n1. Matikan penghemat daya untuk JhopanStore VPN\n2. Aktifkan Autostart\n3. Kunci aplikasi di Recents ( Recent → tahan ikon → gembok )")
+                .setPositiveButton("Matikan penghemat daya", (d, w) -> openBatterySetting())
+                .setNeutralButton("Aktifkan Autostart", (d, w) -> { prefs.edit().putBoolean("autostart_done", true).apply(); openAutostartSetting(); })
+                .setNegativeButton("Tutup", null)
+                .show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Satu langkah lagi")
+            .setMessage("Penghemat daya sudah nonaktif. Sekarang aktifkan Autostart agar VPN bisa hidup sendiri setelah device restart.\n\nLalu kunci aplikasi di Recents ( Recent → tahan ikon → gembok ).")
+            .setPositiveButton("Aktifkan Autostart", (d, w) -> { prefs.edit().putBoolean("autostart_done", true).apply(); openAutostartSetting(); })
+            .setNegativeButton("Tutup", null)
+            .show();
+    }
+
+    private void openBatterySetting() {
+        try {
+            startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getPackageName())));
+        } catch (Exception error) {
+            try { startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)); }
+            catch (Exception ignored) {}
+        }
     }
 
     @Override protected void onPause() {
@@ -172,10 +237,11 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void toggleTraffic() {
+        if (connected) { show("Putuskan VPN dulu untuk mengubah meter"); return; }
         showTraffic = !showTraffic;
         prefs.edit().putBoolean("show_traffic", showTraffic).apply();
         traffic.setVisibility(showTraffic ? android.view.View.VISIBLE : android.view.View.GONE);
-        hasBaseline = false;
+        if (showTraffic) { hasBaseline = false; totalRx = 0; totalTx = 0; traffic.setText("↓ 0 B   ↑ 0 B"); }
         invalidateOptionsMenu();
         show(showTraffic ? "Traffic meter on" : "Traffic meter off");
     }
@@ -202,6 +268,7 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void requestConnect() {
+        if (connected) return; // guard spam-click
         try {
             String uri = activeUri();
             VlessParser.parse(uri);
@@ -315,7 +382,10 @@ public final class MainActivity extends AppCompatActivity {
         status.setText(value);
         connected = "Connected".equals(value) || "Connecting…".equals(value) || "Checking internet…".equals(value) || "Reconnecting…".equals(value);
         connect.setText(connected ? "DISCONNECT" : "CONNECT");
-        if (!connected) resetTraffic();
+        connect.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor(connected ? "#E53935" : "#4CAF50")));
+        connect.setEnabled(!"Connecting…".equals(value) && !"Checking internet…".equals(value));
+        if ("Disconnected".equals(value)) { totalRx = 0; totalTx = 0; hasBaseline = false; if (showTraffic) traffic.setText("↓ 0 B   ↑ 0 B"); }
+        else if (!connected) resetTraffic();
     }
 
     private final Runnable trafficTask = new Runnable() {
@@ -326,22 +396,33 @@ public final class MainActivity extends AppCompatActivity {
     };
 
     private void updateTraffic() {
+        SharedPreferences vpnStatus = getSharedPreferences("vpn_status", MODE_PRIVATE);
+        totalRx = vpnStatus.getLong("session_rx", 0);
+        totalTx = vpnStatus.getLong("session_tx", 0);
+        long now = System.currentTimeMillis();
         long rx = android.net.TrafficStats.getUidRxBytes(uid);
         long tx = android.net.TrafficStats.getUidTxBytes(uid);
-        if (rx < 0 || tx < 0) { traffic.setText("Traffic: unavailable"); return; }
-        long now = System.currentTimeMillis();
-        if (!hasBaseline) { lastRx = rx; lastTx = tx; lastSample = now; hasBaseline = true; }
-        long dRx = rx - lastRx, dTx = tx - lastTx;
-        if (dRx < 0 || dTx < 0) { lastRx = rx; lastTx = tx; lastSample = now; return; }
-        totalRx += dRx; totalTx += dTx;
-        long elapsed = Math.max(1, now - lastSample);
-        long downRate = dRx * 1000 / elapsed, upRate = dTx * 1000 / elapsed;
+        long downRate = 0, upRate = 0;
+        if (rx >= 0 && tx >= 0) {
+            if (!hasBaseline) { lastRx = rx; lastTx = tx; lastSample = now; hasBaseline = true; }
+            long dRx = rx - lastRx, dTx = tx - lastTx;
+            if (dRx >= 0 && dTx >= 0) {
+                long elapsed = Math.max(1, now - lastSample);
+                downRate = dRx * 1000 / elapsed; upRate = dTx * 1000 / elapsed;
+            }
+            lastRx = rx; lastTx = tx; lastSample = now;
+        }
         traffic.setText("↓ " + bytes(totalRx) + " (" + bytes(downRate) + "/s)   ↑ " + bytes(totalTx) + " (" + bytes(upRate) + "/s)");
-        lastRx = rx; lastTx = tx; lastSample = now;
     }
 
-    private void resetTraffic() { hasBaseline = false; if (showTraffic) traffic.setText("↓ " + bytes(totalRx) + "   ↑ " + bytes(totalTx)); }
-    private void saveTotals() { prefs.edit().putLong("traffic_total_rx", totalRx).putLong("traffic_total_tx", totalTx).apply(); }
+    private void resetTraffic() {
+        hasBaseline = false;
+        SharedPreferences vpnStatus = getSharedPreferences("vpn_status", MODE_PRIVATE);
+        totalRx = vpnStatus.getLong("session_rx", 0);
+        totalTx = vpnStatus.getLong("session_tx", 0);
+        if (showTraffic) traffic.setText("↓ " + bytes(totalRx) + "   ↑ " + bytes(totalTx));
+    }
+    private void saveTotals() { }
     private static String bytes(long value) { return value < 1024 ? value + " B" : value < 1048576 ? String.format("%.1f KB", value / 1024d) : String.format("%.2f MB", value / 1048576d); }
 
     private String exportLink() {

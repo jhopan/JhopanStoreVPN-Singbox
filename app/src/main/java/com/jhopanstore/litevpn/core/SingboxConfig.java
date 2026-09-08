@@ -11,8 +11,8 @@ public final class SingboxConfig {
         JSONObject root = new JSONObject();
         root.put("log", new JSONObject().put("level", "warn"));
         root.put("dns", new JSONObject().put("servers", new JSONArray()
-            .put(new JSONObject().put("tag", "dns-main").put("address", "8.8.8.8").put("strategy", "prefer_ipv4"))
-            .put(new JSONObject().put("tag", "dns-backup").put("address", "8.8.4.4").put("strategy", "prefer_ipv4"))
+            .put(new JSONObject().put("tag", "dns-main").put("address", "1.1.1.1").put("strategy", "prefer_ipv4"))
+            .put(new JSONObject().put("tag", "dns-backup").put("address", "8.8.8.8").put("strategy", "prefer_ipv4"))
             .put(new JSONObject().put("tag", "dns-local").put("address", "local")))
             .put("rules", new JSONArray().put(new JSONObject().put("outbound", "direct").put("server", "dns-local"))));
         root.put("inbounds", new JSONArray()
@@ -27,7 +27,7 @@ public final class SingboxConfig {
             .put(new JSONObject().put("type", "direct").put("tag", "direct"))
             .put(new JSONObject().put("type", "block").put("tag", "block"))
             .put(new JSONObject().put("type", "dns").put("tag", "dns-out")));
-        root.put("route", new JSONObject().put("auto_detect_interface", true)
+        root.put("route", new JSONObject().put("auto_detect_interface", false).put("override_android_vpn", true)
             .put("rules", new JSONArray().put(new JSONObject().put("protocol", "dns").put("outbound", "dns-out")))
             .put("final", "proxy"));
         root.put("experimental", new JSONObject().put("cache_file", new JSONObject().put("enabled", true).put("path", cachePath + "/cache.db")));

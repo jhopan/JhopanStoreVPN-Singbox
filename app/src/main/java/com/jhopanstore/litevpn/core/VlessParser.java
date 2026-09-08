@@ -1,9 +1,7 @@
 package com.jhopanstore.litevpn.core;
 
 import android.net.Uri;
-import java.net.URLDecoder;
 import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 public final class VlessParser {
