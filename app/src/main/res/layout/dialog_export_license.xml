@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Config name"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF" />
+    <EditText
+        android:id="@+id/lic_name"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="4dp"
+        android:hint="e.g. Paket Premium - Budi"
+        android:textColorHint="#888888"
+        android:textColor="#FFFFFF"
+        android:background="#222222"
+        android:padding="8dp"
+        android:singleLine="true" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Customer HWID"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF" />
+    <EditText
+        android:id="@+id/lic_hwid"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="4dp"
+        android:hint="24-character HWID"
+        android:textColorHint="#888888"
+        android:textColor="#FFFFFF"
+        android:background="#222222"
+        android:padding="8dp"
+        android:singleLine="true" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Expiry date (0 = never)"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF" />
+    <EditText
+        android:id="@+id/lic_expiry"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="4dp"
+        android:hint="dd/mm/yyyy (empty = never)"
+        android:textColorHint="#888888"
+        android:textColor="#FFFFFF"
+        android:background="#222222"
+        android:padding="8dp"
+        android:singleLine="true" />
+
+    <CheckBox
+        android:id="@+id/lic_lock"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Lock configuration (hide config on customer device, show name + lock logo only)"
+        android:textColor="#FFFFFF"
+        android:checked="true" />
+</LinearLayout>

@@ -10,8 +10,9 @@ import javax.crypto.spec.SecretKeySpec;
 import org.json.JSONObject;
 
 /**
- * Offline AES-GCM license codec. The encryption key is derived from the
- * customer HWID, so only the device with that HWID can decrypt the payload.
+ * Offline AES-GCM license codec. The payload is encrypted with a key derived
+ * from the customer HWID, so only the device holding that HWID can decrypt it.
+ * Wrong device = GCM auth failure, garbage in, garbage rejected.
  */
 public final class LicenseCodec {
     private static final String SALT = "jhopanstore-license-v1";
@@ -28,8 +29,6 @@ public final class LicenseCodec {
         JSONObject root = new JSONObject();
         root.put("v", license.vless);
         root.put("n", license.name);
-        root.put("m", license.message);
-        root.put("c", license.connectedMessage);
         root.put("h", license.hwid);
         root.put("l", license.lock);
         root.put("e", license.expiry);
@@ -50,11 +49,10 @@ public final class LicenseCodec {
     }
 
     public static License decode(String text, String deviceHwid) throws Exception {
-        if (!isEncoded(text)) throw new IllegalArgumentException("Invalid license format");
+        if (!isEncoded(text)) throw new IllegalArgumentException("Not a locked config");
         byte[] payload = Base64.decode(text.substring(PREFIX.length()), Base64.NO_WRAP);
         if (payload.length < 1 + IV_LEN) throw new IllegalArgumentException("Corrupt license");
-        byte version = payload[0];
-        if (version != VERSION) throw new IllegalArgumentException("Unsupported license version");
+        if (payload[0] != VERSION) throw new IllegalArgumentException("Unsupported license version");
         byte[] iv = new byte[IV_LEN];
         byte[] ct = new byte[payload.length - 1 - IV_LEN];
         System.arraycopy(payload, 1, iv, 0, IV_LEN);
@@ -62,20 +60,18 @@ public final class LicenseCodec {
 
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.DECRYPT_MODE, keyFor(deviceHwid), new GCMParameterSpec(TAG_BITS, iv));
-        byte[] plain = cipher.doFinal(ct);
+        byte[] plain = cipher.doFinal(ct); // AEADBadTagException when HWID mismatch
         JSONObject root = new JSONObject(new String(plain, StandardCharsets.UTF_8));
 
-        String hwid = root.optString("h", "");
-        if (!hwid.equalsIgnoreCase(deviceHwid)) throw new IllegalArgumentException("License is not for this device");
-        return new License(
+        License license = new License(
             root.optString("v", ""),
             root.optString("n", ""),
-            root.optString("m", ""),
-            root.optString("c", ""),
-            hwid,
-            root.optBoolean("l", false),
+            deviceHwid,
+            root.optBoolean("l", true),
             root.optLong("e", 0)
         );
+        if (license.vless.isEmpty()) throw new IllegalArgumentException("Corrupt license");
+        return license;
     }
 
     public static boolean expired(License license) {

@@ -41,6 +41,7 @@ public final class MainActivity extends AppCompatActivity {
     private static final int VPN_PERMISSION = 10;
     private static final int IMPORT_FILE = 11;
     private static final int EXPORT_FILE = 12;
+    private static final int EXPORT_LICENSE = 14;
     private static final String JVS_MIME = "application/x-jhopanstore-vpn";
     private final Handler handler = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
@@ -50,7 +51,6 @@ public final class MainActivity extends AppCompatActivity {
     private android.view.View configFields;
     private android.widget.TextView lockBanner;
     private License license;
-    private boolean pendingLicenseExport;
     private Button connect;
     private boolean connected;
     private boolean showTraffic = true;
@@ -69,8 +69,9 @@ public final class MainActivity extends AppCompatActivity {
         status = findViewById(R.id.status); traffic = findViewById(R.id.traffic); connect = findViewById(R.id.connect);
         configFields = findViewById(R.id.configFields); lockBanner = findViewById(R.id.lockBanner);
         load();
+        hwid = Installation.id(this);
         loadLicense();
-        hwid = installationHwid();
+        applyLockState();
         uid = android.os.Process.myUid();
         totalRx = prefs.getLong("traffic_total_rx", 0);
         totalTx = prefs.getLong("traffic_total_tx", 0);
@@ -137,11 +138,37 @@ public final class MainActivity extends AppCompatActivity {
         if (id == R.id.action_import_file) { openImportFile(); return true; }
         if (id == R.id.action_export_clipboard) { copy(exportLink()); return true; }
         if (id == R.id.action_export_file) { createExportFile(); return true; }
+        if (id == R.id.action_export_license) { showExportLicenseDialog(); return true; }
         if (id == R.id.action_hwid) { copy(hwid); return true; }
-        if (id == R.id.action_export_license) { exportLicense(); return true; }
-        if (id == R.id.action_import_license) { openLicenseImport(); return true; }
+        if (id == R.id.action_about) { showAbout(); return true; }
         if (id == R.id.action_traffic) { toggleTraffic(); return true; }
         return super.onOptionsItemSelected(item);
+    }
+
+    private void showAbout() {
+        try {
+            android.view.View view = getLayoutInflater().inflate(R.layout.dialog_about, null);
+            TextView version = view.findViewById(R.id.about_version);
+            try { version.setText("v" + getPackageManager().getPackageInfo(getPackageName(), 0).versionName); }
+            catch (Exception ignored) {}
+            androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setView(view)
+                .create();
+            dialog.setOnShowListener(d -> {
+                try { dialog.getWindow().setBackgroundDrawableResource(android.graphics.Color.parseColor("#1A1A1A")); } catch (Exception ignored) {}
+            });
+            view.findViewById(R.id.about_telegram).setOnClickListener(v -> {
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/jhopan_05"))); }
+                catch (Exception error) { show("No browser"); }
+            });
+            view.findViewById(R.id.about_website).setOnClickListener(v -> {
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://jhopanstore.my.id"))); }
+                catch (Exception error) { show("No browser"); }
+            });
+            dialog.show();
+        } catch (Exception error) {
+            show("About: " + error.getClass().getSimpleName());
+        }
     }
 
     private void toggleTraffic() {
@@ -184,11 +211,94 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private String activeUri() {
-        if (license != null && license.lock) {
-            if (LicenseCodec.expired(license)) { show("Lisensi kedaluwarsa"); throw new IllegalStateException("expired"); }
+        if (license != null) {
+            if (LicenseCodec.expired(license)) throw new IllegalStateException("Lisensi kedaluwarsa");
             return license.vless;
         }
         return exportLink();
+    }
+
+    private void applyLockState() {
+        boolean locked = license != null && license.lock;
+        configFields.setVisibility(locked ? android.view.View.GONE : android.view.View.VISIBLE);
+        lockBanner.setVisibility(locked ? android.view.View.VISIBLE : android.view.View.GONE);
+        if (locked) {
+            String meta = "Terpasang via lisensi • HWID " + hwid;
+            if (license.expiry > 0) meta += "\nBerlaku s.d. " + SimpleDateFormat.getDateInstance(SimpleDateFormat.MEDIUM).format(new Date(license.expiry));
+            lockBanner.setText("🔒 " + (license.name.isEmpty() ? "JhopanStore VPN" : license.name) + "\n" + meta);
+        }
+    }
+
+    private void loadLicense() {
+        String stored = prefs.getString("license_payload", null);
+        if (stored == null) { license = null; return; }
+        try {
+            license = LicenseCodec.decode(stored, hwid);
+            if (LicenseCodec.expired(license)) { show("Lisensi kedaluwarsa"); prefs.edit().remove("license_payload").apply(); license = null; }
+        } catch (Exception error) {
+            prefs.edit().remove("license_payload").apply();
+            license = null;
+        }
+    }
+
+    private void showExportLicenseDialog() {
+        try {
+            VlessParser.parse(exportLink()); // config must be valid before selling it
+        } catch (Exception error) { show(error.getMessage()); return; }
+        android.view.View form = getLayoutInflater().inflate(R.layout.dialog_export_license, null);
+        new AlertDialog.Builder(this)
+            .setTitle("Export Locked Config")
+            .setView(form)
+            .setPositiveButton("Buat File", (d, w) -> {
+                String name = ((EditText) form.findViewById(R.id.lic_name)).getText().toString().trim();
+                String customerHwid = ((EditText) form.findViewById(R.id.lic_hwid)).getText().toString().trim().toUpperCase(Locale.US);
+                String expiryText = ((EditText) form.findViewById(R.id.lic_expiry)).getText().toString().trim();
+                boolean lock = ((android.widget.CheckBox) form.findViewById(R.id.lic_lock)).isChecked();
+                if (customerHwid.length() != 24) { show("HWID harus 24 karakter"); return; }
+                long expiry = 0;
+                if (!expiryText.isEmpty()) {
+                    try {
+                        SimpleDateFormat format = new SimpleDateFormat("dd/MM/yyyy", Locale.US);
+                        format.setLenient(false);
+                        expiry = format.parse(expiryText).getTime() + 86_400_000L; // end of that day
+                    } catch (Exception error) { show("Tanggal salah (dd/mm/yyyy)"); return; }
+                }
+                try {
+                    String payload = LicenseCodec.encode(new License(exportLink(), name, customerHwid, lock, expiry));
+                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).setType(JVS_MIME).putExtra(Intent.EXTRA_TITLE, "jhopanstore-locked.jvs");
+                    pendingExportPayload = payload;
+                    startActivityForResult(intent, EXPORT_LICENSE);
+                } catch (Exception error) { show("Export gagal: " + error.getClass().getSimpleName()); }
+            })
+            .setNegativeButton("Batal", null)
+            .show();
+    }
+    private String pendingExportPayload;
+
+    private void importText(String text) {
+        String value = text == null ? "" : text.trim();
+        if (LicenseCodec.isEncoded(value)) { importLicense(value); return; }
+        try {
+            VlessConfig config = VlessParser.parse(value);
+            address.setText(config.address + ":" + config.port); uuid.setText(config.uuid); path.setText(config.path); sni.setText(config.sni); host.setText(config.host);
+            save(); show("VLESS imported");
+        } catch (Exception error) { show(error.getMessage()); }
+    }
+
+    private void importLicense(String payload) {
+        try {
+            License incoming = LicenseCodec.decode(payload, hwid);
+            if (LicenseCodec.expired(incoming)) { show("Lisensi kedaluwarsa"); return; }
+            prefs.edit().putString("license_payload", payload).apply();
+            license = incoming;
+            applyLockState();
+            show("Lisensi terpasang" + (incoming.lock ? " (config terkunci)" : ""));
+        } catch (Exception error) {
+            String message = error instanceof javax.crypto.AEADBadTagException
+                ? "File bukan untuk HWID device ini"
+                : "Lisensi gagal: " + error.getMessage();
+            show(message);
+        }
     }
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
@@ -196,6 +306,7 @@ public final class MainActivity extends AppCompatActivity {
         if (request == VPN_PERMISSION && result == RESULT_OK) connect(activeUri());
         if (request == IMPORT_FILE && result == RESULT_OK && data != null && data.getData() != null) readImport(data.getData());
         if (request == EXPORT_FILE && result == RESULT_OK && data != null && data.getData() != null) writeExport(data.getData());
+        if (request == EXPORT_LICENSE && result == RESULT_OK && data != null && data.getData() != null) writeLicense(data.getData());
     }
 
     private void connect(String uri) { save(); VpnService.start(this, uri); }
@@ -233,14 +344,6 @@ public final class MainActivity extends AppCompatActivity {
     private void saveTotals() { prefs.edit().putLong("traffic_total_rx", totalRx).putLong("traffic_total_tx", totalTx).apply(); }
     private static String bytes(long value) { return value < 1024 ? value + " B" : value < 1048576 ? String.format("%.1f KB", value / 1024d) : String.format("%.2f MB", value / 1048576d); }
 
-    private void importText(String text) {
-        try {
-            VlessConfig config = VlessParser.parse(text.trim());
-            address.setText(config.address + ":" + config.port); uuid.setText(config.uuid); path.setText(config.path); sni.setText(config.sni); host.setText(config.host);
-            save(); show("VLESS imported");
-        } catch (Exception error) { show(error.getMessage()); }
-    }
-
     private String exportLink() {
         String raw = address.getText().toString().trim(); int divider = raw.lastIndexOf(':');
         String server = divider > 0 ? raw.substring(0, divider) : raw;
@@ -254,12 +357,6 @@ public final class MainActivity extends AppCompatActivity {
     private static String text(EditText field) { return field.getText().toString().trim(); }
     private void load() { address.setText(prefs.getString("address", "")); uuid.setText(prefs.getString("uuid", "")); path.setText(prefs.getString("path", "/")); sni.setText(prefs.getString("sni", "")); host.setText(prefs.getString("host", "")); }
     private void save() { prefs.edit().putString("address", text(address)).putString("uuid", text(uuid)).putString("path", text(path)).putString("sni", text(sni)).putString("host", text(host)).apply(); }
-
-    private String installationHwid() {
-        String id = prefs.getString("installation_id", null);
-        if (id == null) { id = UUID.randomUUID().toString(); prefs.edit().putString("installation_id", id).apply(); }
-        try { byte[] hash = MessageDigest.getInstance("SHA-256").digest(id.getBytes(StandardCharsets.UTF_8)); StringBuilder out = new StringBuilder(); for (byte part : hash) out.append(String.format("%02X", part)); return out.substring(0, 24); } catch (Exception error) { return id; }
-    }
 
     private String clipboard() {
         ClipboardManager manager = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
@@ -278,6 +375,13 @@ public final class MainActivity extends AppCompatActivity {
         try (OutputStream output = getContentResolver().openOutputStream(uri)) {
             output.write(exportLink().getBytes(StandardCharsets.UTF_8)); show("Exported");
         } catch (Exception error) { show("Export failed"); }
+    }
+
+    private void writeLicense(Uri uri) {
+        try (OutputStream output = getContentResolver().openOutputStream(uri)) {
+            output.write(pendingExportPayload.getBytes(StandardCharsets.UTF_8)); show("Locked config exported");
+        } catch (Exception error) { show("Export failed"); }
+        pendingExportPayload = null;
     }
 
     private void show(String value) { Toast.makeText(this, value == null ? "Error" : value, Toast.LENGTH_SHORT).show(); }
