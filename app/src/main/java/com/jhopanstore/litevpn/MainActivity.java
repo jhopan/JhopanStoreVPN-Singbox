@@ -457,7 +457,6 @@ public final class MainActivity extends AppCompatActivity {
     private void connect(String uri) { save(); VpnService.start(this, uri); }
     private void disconnect() { VpnService.stop(this); }
     private void onVpnState(String value) {
-        if (value == null) { refreshPingSchedule(); return; } // settings changed nudge
         status.setText(value);
         connected = "Connected".equals(value) || "Connecting…".equals(value) || "Checking internet…".equals(value) || "Reconnecting…".equals(value);
         connect.setText(connected ? "DISCONNECT" : "CONNECT");
@@ -466,9 +465,6 @@ public final class MainActivity extends AppCompatActivity {
         if ("Disconnected".equals(value)) { totalRx = 0; totalTx = 0; hasBaseline = false; if (showTraffic) traffic.setText("↓ 0 B   ↑ 0 B"); }
         else if (!connected) resetTraffic();
     }
-
-    /** Re-apply HTTP ping schedule inside service (called on null-state nudge). */
-    private void refreshPingSchedule() { VpnService.applyHttpPing(prefs); }
 
     private final Runnable trafficTask = new Runnable() {
         @Override public void run() {

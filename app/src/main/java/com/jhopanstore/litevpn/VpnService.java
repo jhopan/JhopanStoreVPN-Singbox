@@ -95,8 +95,9 @@ public final class VpnService extends android.net.VpnService {
         httpPingInterval = prefs.getInt("http_ping_interval", 3);
         String url = prefs.getString("http_ping_url", null);
         httpPingUrl = url == null || url.isEmpty() ? "http://connectivitycheck.gstatic.com/generate_204" : url;
-        if (listener != null) listener.onState(null); // nudge: service re-reads prefs and reschedules
+        listenerStateRefresh = true; // service re-reads flags + reschedules on next loop tick
     }
+    private static volatile boolean listenerStateRefresh;
 
     public static void setListener(Listener value) { listener = value; }
     public static void start(Context context, String uri) {
@@ -308,6 +309,7 @@ public final class VpnService extends android.net.VpnService {
 
     private void scheduleHttpPing() {
         if (pingFuture != null) { pingFuture.cancel(false); pingFuture = null; }
+        listenerStateRefresh = false;
         if (!httpPingEnabled) return;
         int seconds = Math.max(1, httpPingInterval);
         try { pingFuture = heartbeat.scheduleWithFixedDelay(this::runHttpPing, seconds, seconds, TimeUnit.SECONDS); }
@@ -316,6 +318,7 @@ public final class VpnService extends android.net.VpnService {
 
     private void runHttpPing() {
         synchronized (lifecycleLock) { if (!running || connecting) return; }
+        if (listenerStateRefresh) { scheduleHttpPing(); return; } // settings changed: reschedule with new values
         String failure = pingUrl(httpPingUrl);
         if (failure == null) { pingFailures = 0; return; }
         pingFailures++;
