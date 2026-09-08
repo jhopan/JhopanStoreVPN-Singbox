@@ -12,6 +12,8 @@ A lightweight Android VPN client for VLESS over WebSocket + TLS.
 [![Platform](https://img.shields.io/badge/platform-Android%2024%2B-121212)](#build)
 [![Architecture](https://img.shields.io/badge/arch-arm64--v8a-1976D2)](#build)
 
+Made with :green_heart: by **[JhopanStore](https://jhopanstore.my.id)** • [Telegram](https://t.me/jhopan_05)
+
 </div>
 
 ## Overview
