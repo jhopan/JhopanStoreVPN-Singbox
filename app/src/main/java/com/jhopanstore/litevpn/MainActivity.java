@@ -313,32 +313,41 @@ public final class MainActivity extends AppCompatActivity {
             VlessParser.parse(exportLink()); // config must be valid before selling it
         } catch (Exception error) { show(error.getMessage()); return; }
         android.view.View form = getLayoutInflater().inflate(R.layout.dialog_export_license, null);
-        new AlertDialog.Builder(this)
+        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle("Export Locked Config")
             .setView(form)
-            .setPositiveButton("Buat File", (d, w) -> {
-                String name = ((EditText) form.findViewById(R.id.lic_name)).getText().toString().trim();
-                String customerHwid = ((EditText) form.findViewById(R.id.lic_hwid)).getText().toString().trim().toUpperCase(Locale.US);
-                String expiryText = ((EditText) form.findViewById(R.id.lic_expiry)).getText().toString().trim();
-                boolean lock = ((android.widget.CheckBox) form.findViewById(R.id.lic_lock)).isChecked();
-                if (customerHwid.length() != 24) { show("HWID harus 24 karakter"); return; }
-                long expiry = 0;
-                if (!expiryText.isEmpty()) {
-                    try {
-                        SimpleDateFormat format = new SimpleDateFormat("dd/MM/yyyy", Locale.US);
-                        format.setLenient(false);
-                        expiry = format.parse(expiryText).getTime() + 86_400_000L; // end of that day
-                    } catch (Exception error) { show("Tanggal salah (dd/mm/yyyy)"); return; }
-                }
+            .create();
+        dialog.setOnShowListener(d -> {
+            try { dialog.getWindow().setBackgroundDrawableResource(android.graphics.Color.parseColor("#1A1A1A")); } catch (Exception ignored) {}
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setVisibility(android.view.View.GONE);
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEGATIVE).setVisibility(android.view.View.GONE);
+            TextView title = dialog.findViewById(androidx.appcompat.R.id.alertTitle);
+            if (title != null) { title.setTextColor(android.graphics.Color.WHITE); title.setTextSize(18); }
+        });
+        form.findViewById(R.id.lic_cancel).setOnClickListener(v -> dialog.dismiss());
+        form.findViewById(R.id.lic_create).setOnClickListener(v -> {
+            String name = ((EditText) form.findViewById(R.id.lic_name)).getText().toString().trim();
+            String customerHwid = ((EditText) form.findViewById(R.id.lic_hwid)).getText().toString().trim().toUpperCase(Locale.US);
+            String expiryText = ((EditText) form.findViewById(R.id.lic_expiry)).getText().toString().trim();
+            boolean lock = ((android.widget.CheckBox) form.findViewById(R.id.lic_lock)).isChecked();
+            if (customerHwid.length() != 24) { show("HWID harus 24 karakter"); return; }
+            long expiry = 0;
+            if (!expiryText.isEmpty()) {
                 try {
-                    String payload = LicenseCodec.encode(new License(exportLink(), name, customerHwid, lock, expiry));
-                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).setType(JVS_MIME).putExtra(Intent.EXTRA_TITLE, "jhopanstore-locked.jvs");
-                    pendingExportPayload = payload;
-                    startActivityForResult(intent, EXPORT_LICENSE);
-                } catch (Exception error) { show("Export gagal: " + error.getClass().getSimpleName()); }
-            })
-            .setNegativeButton("Batal", null)
-            .show();
+                    SimpleDateFormat format = new SimpleDateFormat("dd/MM/yyyy", Locale.US);
+                    format.setLenient(false);
+                    expiry = format.parse(expiryText).getTime() + 86_400_000L; // end of that day
+                } catch (Exception error) { show("Tanggal salah (dd/mm/yyyy)"); return; }
+            }
+            try {
+                String payload = LicenseCodec.encode(new License(exportLink(), name, customerHwid, lock, expiry));
+                Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).setType(JVS_MIME).putExtra(Intent.EXTRA_TITLE, "jhopanstore-locked.jvs");
+                pendingExportPayload = payload;
+                startActivityForResult(intent, EXPORT_LICENSE);
+                dialog.dismiss();
+            } catch (Exception error) { show("Export gagal: " + error.getClass().getSimpleName()); }
+        });
+        dialog.show();
     }
     private String pendingExportPayload;
 

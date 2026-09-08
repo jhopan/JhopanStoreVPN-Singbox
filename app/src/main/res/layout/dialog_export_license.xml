@@ -3,70 +3,107 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="20dp">
+    android:background="#1A1A1A"
+    android:padding="24dp">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Config name"
         android:textStyle="bold"
+        android:textSize="13sp"
         android:textColor="#FFFFFF" />
     <EditText
         android:id="@+id/lic_name"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:layout_marginTop="4dp"
+        android:layout_height="46dp"
+        android:layout_marginTop="6dp"
         android:hint="e.g. Paket Premium - Budi"
-        android:textColorHint="#888888"
+        android:textColorHint="#777777"
         android:textColor="#FFFFFF"
-        android:background="#222222"
-        android:padding="8dp"
+        android:backgroundTint="#333333"
+        android:padding="10dp"
         android:singleLine="true" />
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="18dp"
         android:text="Customer HWID"
         android:textStyle="bold"
+        android:textSize="13sp"
         android:textColor="#FFFFFF" />
     <EditText
         android:id="@+id/lic_hwid"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:layout_marginTop="4dp"
+        android:layout_height="46dp"
+        android:layout_marginTop="6dp"
         android:hint="24-character HWID"
-        android:textColorHint="#888888"
+        android:textColorHint="#777777"
         android:textColor="#FFFFFF"
-        android:background="#222222"
-        android:padding="8dp"
-        android:singleLine="true" />
+        android:backgroundTint="#333333"
+        android:padding="10dp"
+        android:singleLine="true"
+        android:textAllCaps="true" />
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Expiry date (0 = never)"
+        android:layout_marginTop="18dp"
+        android:text="Expiry date (dd/mm/yyyy, empty = never)"
         android:textStyle="bold"
+        android:textSize="13sp"
         android:textColor="#FFFFFF" />
     <EditText
         android:id="@+id/lic_expiry"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:layout_marginTop="4dp"
-        android:hint="dd/mm/yyyy (empty = never)"
-        android:textColorHint="#888888"
+        android:layout_height="46dp"
+        android:layout_marginTop="6dp"
+        android:hint="dd/mm/yyyy"
+        android:textColorHint="#777777"
         android:textColor="#FFFFFF"
-        android:background="#222222"
-        android:padding="8dp"
+        android:backgroundTint="#333333"
+        android:padding="10dp"
         android:singleLine="true" />
 
     <CheckBox
         android:id="@+id/lic_lock"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Lock configuration (hide config on customer device, show name + lock logo only)"
-        android:textColor="#FFFFFF"
+        android:layout_marginTop="18dp"
+        android:text="Lock configuration (hide config on customer device)"
+        android:textSize="13sp"
+        android:textColor="#BDBDBD"
+        android:buttonTint="#4CAF50"
         android:checked="true" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:orientation="horizontal"
+        android:gravity="end">
+
+        <Button
+            android:id="@+id/lic_cancel"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:paddingHorizontal="16dp"
+            android:text="BATAL"
+            android:textAllCaps="true"
+            android:textColor="#9E9E9E" />
+
+        <Button
+            android:id="@+id/lic_create"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:paddingHorizontal="20dp"
+            android:text="BUAT FILE"
+            android:textAllCaps="true"
+            android:textStyle="bold"
+            android:backgroundTint="#4CAF50"
+            android:textColor="#FFFFFF" />
+    </LinearLayout>
 </LinearLayout>
