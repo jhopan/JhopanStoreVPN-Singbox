@@ -230,25 +230,30 @@ public final class MainActivity extends AppCompatActivity {
             try { dialog.getWindow().setBackgroundDrawableResource(android.graphics.Color.parseColor("#1A1A1A")); } catch (Exception ignored) {}
         });
         form.findViewById(R.id.set_copy_hwid).setOnClickListener(v -> copy(hwid));
+        form.findViewById(R.id.set_cancel).setOnClickListener(v -> dialog.dismiss());
         form.findViewById(R.id.set_done).setOnClickListener(v -> {
-            int seconds;
-            try { seconds = Integer.parseInt(interval.getText().toString().trim()); } catch (Exception ignored) { seconds = 3; }
-            if (seconds < 1) seconds = 1;
-            String pingUrl = url.getText().toString().trim();
-            if (pingUrl.isEmpty()) pingUrl = "http://connectivitycheck.gstatic.com/generate_204";
-            boolean show = traffic.isChecked();
-            prefs.edit()
-                .putBoolean("http_ping", ping.isChecked())
-                .putInt("http_ping_interval", seconds)
-                .putString("http_ping_url", pingUrl)
-                .putBoolean("show_traffic", show)
-                .apply();
-            traffic.setVisibility(show ? android.view.View.VISIBLE : android.view.View.GONE);
-            if (!show) traffic.setText("");
-            hasBaseline = false;
-            VpnService.applyHttpPing(prefs);
-            dialog.dismiss();
-            show("Pengaturan disimpan");
+            try {
+                int seconds;
+                try { seconds = Integer.parseInt(interval.getText().toString().trim()); } catch (Exception ignored) { seconds = 3; }
+                if (seconds < 1) seconds = 1;
+                String pingUrl = url.getText().toString().trim();
+                if (pingUrl.isEmpty()) pingUrl = "http://connectivitycheck.gstatic.com/generate_204";
+                boolean show = traffic.isChecked();
+                prefs.edit()
+                    .putBoolean("http_ping", ping.isChecked())
+                    .putInt("http_ping_interval", seconds)
+                    .putString("http_ping_url", pingUrl)
+                    .putBoolean("show_traffic", show)
+                    .apply();
+                traffic.setVisibility(show ? android.view.View.VISIBLE : android.view.View.GONE);
+                if (!show) traffic.setText("");
+                hasBaseline = false;
+                VpnService.applyHttpPing(prefs);
+                dialog.dismiss();
+                show("Pengaturan disimpan");
+            } catch (Exception error) {
+                show("Gagal menyimpan: " + error.getClass().getSimpleName());
+            }
         });
         dialog.show();
     }
