@@ -247,6 +247,7 @@ public final class MainActivity extends AppCompatActivity {
                     .apply();
                 traffic.setVisibility(show ? android.view.View.VISIBLE : android.view.View.GONE);
                 if (!show) traffic.setText("");
+                showTraffic = show; // live update: meter row follows the setting immediately
                 hasBaseline = false;
                 VpnService.applyHttpPing(prefs);
                 dialog.dismiss();
