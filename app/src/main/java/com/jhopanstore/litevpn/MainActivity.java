@@ -221,8 +221,9 @@ public final class MainActivity extends AppCompatActivity {
         interval.setText(String.valueOf(prefs.getInt("http_ping_interval", 3)));
         url.setText(prefs.getString("http_ping_url", "http://connectivitycheck.gstatic.com/generate_204"));
         traffic.setChecked(prefs.getBoolean("show_traffic", true));
+        applyFormState(form, ping.isChecked());
+        ping.setOnCheckedChangeListener((b, checked) -> applyFormState(form, checked)); // enable → fields editable; off → read-only
         androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Pengaturan")
             .setView(form)
             .create();
         dialog.setOnShowListener(d -> {
@@ -246,11 +247,20 @@ public final class MainActivity extends AppCompatActivity {
             if (!show) traffic.setText("");
             hasBaseline = false;
             VpnService.applyHttpPing(prefs);
-            invalidateOptionsMenu();
             dialog.dismiss();
             show("Pengaturan disimpan");
         });
         dialog.show();
+    }
+
+    /** Fields only editable when HTTP ping is enabled; disabled = read-only for safety. */
+    private void applyFormState(android.view.View form, boolean pingEnabled) {
+        android.widget.EditText interval = form.findViewById(R.id.set_ping_interval);
+        android.widget.EditText url = form.findViewById(R.id.set_ping_url);
+        interval.setEnabled(pingEnabled);
+        url.setEnabled(pingEnabled);
+        interval.setAlpha(pingEnabled ? 1f : 0.4f);
+        url.setAlpha(pingEnabled ? 1f : 0.4f);
     }
 
     private void confirmClearConfig() {
