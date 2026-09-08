@@ -24,25 +24,16 @@
             android:padding="24dp"
             android:gravity="center_horizontal">
 
-            <ImageView
-                android:layout_width="100dp"
-                android:layout_height="100dp"
-                android:layout_marginTop="16dp"
-                android:src="@drawable/ic_launcher_foreground"
-                android:contentDescription="JhopanStore VPN" />
-
-            <LinearLayout
+            <TextView
                 android:id="@+id/lockBanner"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:orientation="vertical"
                 android:gravity="center"
-                android:visibility="gone">
-
-                <include layout="@layout/view_locked_banner" />
-
-            </LinearLayout>
+                android:textStyle="bold"
+                android:textSize="18sp"
+                android:textColor="#FFFFFF"
+                android:visibility="gone" />
 
             <LinearLayout
                 android:id="@+id/configFields"
