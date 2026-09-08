@@ -6,6 +6,7 @@
     <item android:id="@+id/action_export_file" android:title="Export .jvs File" />
     <item android:id="@+id/action_export_license" android:title="Export Locked Config" />
     <item android:id="@+id/action_hwid" android:title="Copy HWID" />
+    <item android:id="@+id/action_clear" android:title="Clear Config" />
     <item android:id="@+id/action_about" android:title="About" />
     <item android:id="@+id/action_traffic" android:title="Traffic Meter" android:checkable="true" />
 </menu>

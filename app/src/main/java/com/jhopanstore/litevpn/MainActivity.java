@@ -205,9 +205,28 @@ public final class MainActivity extends AppCompatActivity {
         if (id == R.id.action_export_file) { createExportFile(); return true; }
         if (id == R.id.action_export_license) { showExportLicenseDialog(); return true; }
         if (id == R.id.action_hwid) { copy(hwid); return true; }
+        if (id == R.id.action_clear) { confirmClearConfig(); return true; }
         if (id == R.id.action_about) { showAbout(); return true; }
         if (id == R.id.action_traffic) { toggleTraffic(); return true; }
         return super.onOptionsItemSelected(item);
+    }
+
+    private void confirmClearConfig() {
+        if (connected) { show("Putuskan VPN dulu sebelum clear config"); return; }
+        new AlertDialog.Builder(this)
+            .setTitle("Clear Config")
+            .setMessage("Hapus semua config, lisensi, dan kembali ke awal?")
+            .setPositiveButton("Hapus", (d, w) -> clearConfig())
+            .setNegativeButton("Batal", null)
+            .show();
+    }
+
+    private void clearConfig() {
+        prefs.edit().remove("address").remove("uuid").remove("path").remove("sni").remove("host").remove("license_payload").apply();
+        license = null;
+        address.setText(""); uuid.setText(""); path.setText("/"); sni.setText(""); host.setText("");
+        applyLockState();
+        show("Config dibersihkan");
     }
 
     private void showAbout() {
